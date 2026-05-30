@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "lib": ["es2023", "ESNext.Disposable"],
+    "target": "es2022",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "strict": true,
+    "outDir": "dist",
+    "declaration": true,
+    "skipLibCheck": true,
+    "ignoreDeprecations": "5.0"
+  },
+  "include": ["index.ts", "src/**/*", "test/**/*"]
+}

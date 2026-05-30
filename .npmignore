@@ -1,0 +1,8 @@
+node_modules
+yarn.lock
+package-lock.json
+test
+CLAUDE.md
+.github
+eslint.config.mjs
+docker-compose.yml

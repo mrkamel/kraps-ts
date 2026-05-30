@@ -1,0 +1,38 @@
+{
+  "name": "kraps",
+  "version": "0.10.0",
+  "description": "Easily process big data in TypeScript/Node using a map/reduce framework on top of your existing background job framework",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "author": "Benjamin Vetter",
+  "dependencies": {
+    "cli-progress": "^3.12.0",
+    "ioredis": "^5.7.0"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-s3": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-s3": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
+    "@eslint/js": "^9.25.0",
+    "@types/cli-progress": "^3.11.6",
+    "@types/node": "^24.3.0",
+    "eslint": "^9.25.0",
+    "globals": "^16.0.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.30.1",
+    "vitest": "^1.5.1"
+  },
+  "scripts": {
+    "test": "vitest run --poolOptions.forks.singleFork=true --fileParallelism=false",
+    "lint": "eslint index.ts 'src/**/*.ts' 'test/**/*.ts'",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  }
+}
