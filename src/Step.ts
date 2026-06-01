@@ -1,4 +1,5 @@
 import { Action } from './actions';
+import { Enqueuer } from './config';
 import { Frame } from './Frame';
 import { Partitioner } from './hashPartitioner';
 
@@ -14,7 +15,7 @@ export type Step = {
   partitions: number,
   jobs?: number | null,
   block?: StepBlock,
-  worker: unknown,
+  enqueuer?: Enqueuer,
   before?: (() => void | Promise<void>) | null,
   frame?: Frame,
   dependency?: JobLike,

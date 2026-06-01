@@ -16,6 +16,7 @@ describe('config', () => {
   it('sets all fields when fully specified', () => {
     const driver = buildDriver();
     const redis = buildRedis();
+    const enqueuer = async () => {};
 
     configure({
       driver,
@@ -23,6 +24,7 @@ describe('config', () => {
       namespace: 'namespace',
       jobTtl: 100,
       showProgress: true,
+      enqueuer,
     });
 
     const config = getConfig();
@@ -32,10 +34,11 @@ describe('config', () => {
     expect(config.namespace).toBe('namespace');
     expect(config.jobTtl).toBe(100);
     expect(config.showProgress).toBe(true);
+    expect(config.enqueuer).toBe(enqueuer);
   });
 
   it('applies the default jobTtl of 4 days when not specified', () => {
-    configure({ driver: buildDriver(), redis: buildRedis() });
+    configure({ driver: buildDriver(), redis: buildRedis(), enqueuer: async () => {} });
 
     expect(getConfig().jobTtl).toBe(4 * 24 * 60 * 60);
   });
@@ -44,8 +47,8 @@ describe('config', () => {
     const driver = buildDriver();
     const redis = buildRedis();
 
-    configure({ driver, redis, namespace: 'temporary', jobTtl: 42, showProgress: false });
-    configure({ driver, redis });
+    configure({ driver, redis, namespace: 'temporary', jobTtl: 42, showProgress: false, enqueuer: async () => {} });
+    configure({ driver, redis, enqueuer: async () => {} });
 
     const config = getConfig();
 
@@ -64,7 +67,7 @@ describe('config', () => {
     }
 
     it('stores the array and finds classes by jobName', () => {
-      configure({ driver: buildDriver(), redis: buildRedis(), jobClasses: [Good] });
+      configure({ driver: buildDriver(), redis: buildRedis(), jobClasses: [Good], enqueuer: async () => {} });
 
       expect(getConfig().jobClasses).toEqual([Good]);
       expect(findJobClass('Good')).toBe(Good);
@@ -82,6 +85,7 @@ describe('config', () => {
         driver: buildDriver(),
         redis: buildRedis(),
         jobClasses: [Bad as any],
+        enqueuer: async () => {},
       })).toThrow(/missing a static jobName/);
     });
 
@@ -98,6 +102,7 @@ describe('config', () => {
         driver: buildDriver(),
         redis: buildRedis(),
         jobClasses: [Empty],
+        enqueuer: async () => {},
       })).toThrow(/non-empty string/);
     });
 
@@ -122,6 +127,7 @@ describe('config', () => {
         driver: buildDriver(),
         redis: buildRedis(),
         jobClasses: [A, B],
+        enqueuer: async () => {},
       })).toThrow(/duplicate jobName "Same"/);
     });
   });

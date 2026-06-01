@@ -2,8 +2,7 @@ import { Redis } from 'ioredis';
 import type { Driver } from './drivers/Driver';
 import type { KrapsJobClass } from './KrapsJob';
 
-export type Enqueuer = (worker: unknown, json: string) => void | Promise<void>;
-
+export type Enqueuer = (json: string) => void | Promise<void>;
 export type JobClassRegistry = KrapsJobClass[];
 
 export type KrapsConfig = {
@@ -14,6 +13,7 @@ export type KrapsConfig = {
   showProgress: boolean,
   enqueuer: Enqueuer,
   jobClasses: JobClassRegistry,
+  jobClassByName: Map<string, KrapsJobClass>,
 };
 
 export type ConfigureOptions = {
@@ -22,22 +22,17 @@ export type ConfigureOptions = {
   namespace?: string | null,
   jobTtl?: number,
   showProgress?: boolean,
-  enqueuer?: Enqueuer,
+  enqueuer: Enqueuer,
   jobClasses?: JobClassRegistry,
 };
 
 const FOUR_DAYS_SECONDS = 4 * 24 * 60 * 60;
 
-const defaultEnqueuer: Enqueuer = () => {
-  throw new Error('Kraps: no enqueuer configured');
-};
-
 let config: KrapsConfig | null = null;
 
 export function configure(options: ConfigureOptions): void {
   const jobClasses = options.jobClasses ?? [];
-
-  validateJobClasses(jobClasses);
+  const jobClassByName = buildJobClassIndex(jobClasses);
 
   config = {
     driver: options.driver,
@@ -45,8 +40,9 @@ export function configure(options: ConfigureOptions): void {
     namespace: options.namespace ?? null,
     jobTtl: options.jobTtl ?? FOUR_DAYS_SECONDS,
     showProgress: options.showProgress ?? true,
-    enqueuer: options.enqueuer ?? defaultEnqueuer,
+    enqueuer: options.enqueuer,
     jobClasses,
+    jobClassByName,
   };
 }
 
@@ -57,11 +53,11 @@ export function getConfig(): KrapsConfig {
 }
 
 export function findJobClass(name: string): KrapsJobClass | undefined {
-  return getConfig().jobClasses.find((klass) => klass.jobName === name);
+  return getConfig().jobClassByName.get(name);
 }
 
-function validateJobClasses(jobClasses: JobClassRegistry): void {
-  const seen = new Set<string>();
+function buildJobClassIndex(jobClasses: JobClassRegistry): Map<string, KrapsJobClass> {
+  const index = new Map<string, KrapsJobClass>();
 
   for (const klass of jobClasses) {
     if (typeof klass.jobName !== 'string') {
@@ -72,10 +68,12 @@ function validateJobClasses(jobClasses: JobClassRegistry): void {
       throw new Error(`Kraps: job class ${klass.name || '<anonymous>'}.jobName must be a non-empty string`);
     }
 
-    if (seen.has(klass.jobName)) {
+    if (index.has(klass.jobName)) {
       throw new Error(`Kraps: duplicate jobName "${klass.jobName}" in jobClasses`);
     }
 
-    seen.add(klass.jobName);
+    index.set(klass.jobName, klass);
   }
+
+  return index;
 }

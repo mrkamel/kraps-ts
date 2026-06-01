@@ -1,17 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import { Actions } from '../src/actions';
+import { Enqueuer } from '../src/config';
 import { hashPartitioner, Partitioner } from '../src/hashPartitioner';
 import { Job } from '../src/Job';
 
-const WORKER_A = 'WorkerA';
-const WORKER_B = 'WorkerB';
+const ENQUEUER_A: Enqueuer = async () => undefined;
+const ENQUEUER_B: Enqueuer = async () => undefined;
 
 describe('Job', () => {
   describe('parallelize', () => {
     it('adds a parallelize step with defaults', () => {
       const block = () => [];
 
-      const job = new Job({ worker: WORKER_A }).parallelize(block, { partitions: 8 });
+      const job = new Job({ enqueuer: ENQUEUER_A }).parallelize(block, { partitions: 8 });
 
       expect(job.steps).toHaveLength(1);
 
@@ -19,25 +20,25 @@ describe('Job', () => {
         action: Actions.PARALLELIZE,
         partitions: 8,
         partitioner: hashPartitioner,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
         block,
       });
     });
 
-    it('respects the passed partitioner, worker and before', () => {
+    it('respects the passed partitioner, enqueuer and before', () => {
       const block = () => [];
       const partitioner: Partitioner = (key) => key as number;
       const before = () => undefined;
 
-      const job = new Job({ worker: WORKER_A })
-        .parallelize(block, { partitions: 16, partitioner, worker: WORKER_B, before });
+      const job = new Job({ enqueuer: ENQUEUER_A })
+        .parallelize(block, { partitions: 16, partitioner, enqueuer: ENQUEUER_B, before });
 
       expect(job.steps[0]).toMatchObject({
         action: Actions.PARALLELIZE,
         partitions: 16,
         partitioner,
-        worker: WORKER_B,
+        enqueuer: ENQUEUER_B,
         before,
         block,
       });
@@ -45,10 +46,10 @@ describe('Job', () => {
   });
 
   describe('map', () => {
-    it('inherits partitions from the previous step and defaults the worker', () => {
+    it('inherits partitions from the previous step and defaults the enqueuer', () => {
       const block = () => [];
 
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 4 })
         .map(block, { partitions: 8 });
 
@@ -58,27 +59,27 @@ describe('Job', () => {
         action: Actions.MAP,
         partitions: 8,
         jobs: 4,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
         block,
       });
     });
 
-    it('respects the passed jobs, partitions, partitioner, worker and before', () => {
+    it('respects the passed jobs, partitions, partitioner, enqueuer and before', () => {
       const block = () => [];
       const partitioner: Partitioner = (key) => key as number;
       const before = () => undefined;
 
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
-        .map(block, { jobs: 4, partitions: 16, partitioner, worker: WORKER_B, before });
+        .map(block, { jobs: 4, partitions: 16, partitioner, enqueuer: ENQUEUER_B, before });
 
       expect(job.steps[1]).toMatchObject({
         action: Actions.MAP,
         jobs: 4,
         partitions: 16,
         partitioner,
-        worker: WORKER_B,
+        enqueuer: ENQUEUER_B,
         before,
         block,
       });
@@ -89,7 +90,7 @@ describe('Job', () => {
     it('adds a mapPartitions step', () => {
       const block = () => [];
 
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 4 })
         .mapPartitions(block, { partitions: 8 });
 
@@ -97,7 +98,7 @@ describe('Job', () => {
         action: Actions.MAP_PARTITIONS,
         partitions: 8,
         jobs: 4,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
         block,
       });
@@ -108,16 +109,16 @@ describe('Job', () => {
       const partitioner: Partitioner = (key) => key as number;
       const before = () => undefined;
 
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
-        .mapPartitions(block, { jobs: 4, partitions: 16, partitioner, worker: WORKER_B, before });
+        .mapPartitions(block, { jobs: 4, partitions: 16, partitioner, enqueuer: ENQUEUER_B, before });
 
       expect(job.steps[1]).toMatchObject({
         action: Actions.MAP_PARTITIONS,
         jobs: 4,
         partitions: 16,
         partitioner,
-        worker: WORKER_B,
+        enqueuer: ENQUEUER_B,
         before,
         block,
       });
@@ -128,7 +129,7 @@ describe('Job', () => {
     it('adds a reduce step with defaults inherited from the previous step', () => {
       const block = (_key: unknown, _left: unknown, _right: unknown) => 0;
 
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
         .map(() => [])
         .reduce(block);
@@ -137,26 +138,26 @@ describe('Job', () => {
         action: Actions.REDUCE,
         partitions: 8,
         partitioner: hashPartitioner,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
         block,
       });
     });
 
-    it('respects the passed jobs, worker and before', () => {
+    it('respects the passed jobs, enqueuer and before', () => {
       const block = (_key: unknown, _left: unknown, _right: unknown) => 0;
       const before = () => undefined;
 
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
         .map(() => [])
-        .reduce(block, { jobs: 4, before, worker: WORKER_B });
+        .reduce(block, { jobs: 4, before, enqueuer: ENQUEUER_B });
 
       expect(job.steps[2]).toMatchObject({
         action: Actions.REDUCE,
         jobs: 4,
         partitions: 8,
-        worker: WORKER_B,
+        enqueuer: ENQUEUER_B,
         before,
         block,
       });
@@ -165,11 +166,11 @@ describe('Job', () => {
 
   describe('append', () => {
     it('adds an append step with the dependency and step index', () => {
-      const job1 = new Job({ worker: WORKER_A })
+      const job1 = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
         .map(() => []);
 
-      const job2 = new Job({ worker: WORKER_A })
+      const job2 = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
         .map(() => [])
         .append(job1);
@@ -177,30 +178,30 @@ describe('Job', () => {
       expect(job2.steps[2]).toMatchObject({
         action: Actions.APPEND,
         partitions: 8,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
         dependency: job1,
         options: { appendStepIndex: 1 },
       });
     });
 
-    it('respects the passed jobs, worker and before', () => {
+    it('respects the passed jobs, enqueuer and before', () => {
       const before = () => undefined;
 
-      const job1 = new Job({ worker: WORKER_A })
+      const job1 = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
         .map(() => []);
 
-      const job2 = new Job({ worker: WORKER_A })
+      const job2 = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
         .map(() => [])
-        .append(job1, { jobs: 4, worker: WORKER_B, before });
+        .append(job1, { jobs: 4, enqueuer: ENQUEUER_B, before });
 
       expect(job2.steps[2]).toMatchObject({
         action: Actions.APPEND,
         jobs: 4,
         partitions: 8,
-        worker: WORKER_B,
+        enqueuer: ENQUEUER_B,
         before,
       });
     });
@@ -210,11 +211,11 @@ describe('Job', () => {
     it('adds a combine step with the dependency and step index', () => {
       const block = () => [] as [string, number][];
 
-      const job1 = new Job({ worker: WORKER_A })
+      const job1 = new Job({ enqueuer: ENQUEUER_A })
         .parallelize<string>(() => [], { partitions: 8 })
         .map<string, number>(() => []);
 
-      const job2 = new Job({ worker: WORKER_A })
+      const job2 = new Job({ enqueuer: ENQUEUER_A })
         .parallelize<string>(() => [], { partitions: 8 })
         .map<string, number>(() => [])
         .combine(job1, block);
@@ -222,7 +223,7 @@ describe('Job', () => {
       expect(job2.steps[2]).toMatchObject({
         action: Actions.COMBINE,
         partitions: 8,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
         block,
         dependency: job1,
@@ -230,24 +231,24 @@ describe('Job', () => {
       });
     });
 
-    it('respects the passed jobs, worker and before', () => {
+    it('respects the passed jobs, enqueuer and before', () => {
       const block = () => [] as [string, number][];
       const before = () => undefined;
 
-      const job1 = new Job({ worker: WORKER_A })
+      const job1 = new Job({ enqueuer: ENQUEUER_A })
         .parallelize<string>(() => [], { partitions: 8 })
         .map<string, number>(() => []);
 
-      const job2 = new Job({ worker: WORKER_A })
+      const job2 = new Job({ enqueuer: ENQUEUER_A })
         .parallelize<string>(() => [], { partitions: 8 })
         .map<string, number>(() => [])
-        .combine(job1, block, { jobs: 4, worker: WORKER_B, before });
+        .combine(job1, block, { jobs: 4, enqueuer: ENQUEUER_B, before });
 
       expect(job2.steps[2]).toMatchObject({
         action: Actions.COMBINE,
         jobs: 4,
         partitions: 8,
-        worker: WORKER_B,
+        enqueuer: ENQUEUER_B,
         before,
         block,
       });
@@ -256,14 +257,14 @@ describe('Job', () => {
 
   describe('repartition', () => {
     it('adds a map step with a passthrough block', () => {
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
         .repartition({ partitions: 16 });
 
       expect(job.steps[1]).toMatchObject({
         action: Actions.MAP,
         partitions: 16,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
       });
 
@@ -272,20 +273,20 @@ describe('Job', () => {
       expect(collected).toEqual([['key', 'value']]);
     });
 
-    it('respects the passed jobs, partitioner, worker and before', () => {
+    it('respects the passed jobs, partitioner, enqueuer and before', () => {
       const partitioner: Partitioner = (key) => key as number;
       const before = () => undefined;
 
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
-        .repartition({ jobs: 4, partitions: 16, partitioner, worker: WORKER_B, before });
+        .repartition({ jobs: 4, partitions: 16, partitioner, enqueuer: ENQUEUER_B, before });
 
       expect(job.steps[1]).toMatchObject({
         action: Actions.MAP,
         jobs: 4,
         partitions: 16,
         partitioner,
-        worker: WORKER_B,
+        enqueuer: ENQUEUER_B,
         before,
       });
     });
@@ -293,30 +294,30 @@ describe('Job', () => {
 
   describe('eachPartition', () => {
     it('adds an each_partition step with defaults inherited', () => {
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
         .eachPartition(() => undefined);
 
       expect(job.steps[1]).toMatchObject({
         action: Actions.EACH_PARTITION,
         partitions: 8,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
       });
     });
 
-    it('respects the passed jobs, worker and before', () => {
+    it('respects the passed jobs, enqueuer and before', () => {
       const before = () => undefined;
 
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
-        .eachPartition(() => undefined, { jobs: 4, worker: WORKER_B, before });
+        .eachPartition(() => undefined, { jobs: 4, enqueuer: ENQUEUER_B, before });
 
       expect(job.steps[1]).toMatchObject({
         action: Actions.EACH_PARTITION,
         jobs: 4,
         partitions: 8,
-        worker: WORKER_B,
+        enqueuer: ENQUEUER_B,
         before,
       });
     });
@@ -324,24 +325,24 @@ describe('Job', () => {
 
   describe('dump', () => {
     it('adds an each_partition step', () => {
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
         .dump({ prefix: 'path/to/destination' });
 
       expect(job.steps[1]).toMatchObject({
         action: Actions.EACH_PARTITION,
         partitions: 8,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
       });
     });
 
-    it('respects the passed worker', () => {
-      const job = new Job({ worker: WORKER_A })
+    it('respects the passed enqueuer', () => {
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 8 })
-        .dump({ prefix: 'path/to/destination', worker: WORKER_B });
+        .dump({ prefix: 'path/to/destination', enqueuer: ENQUEUER_B });
 
-      expect(job.steps[1].worker).toBe(WORKER_B);
+      expect(job.steps[1].enqueuer).toBe(ENQUEUER_B);
     });
   });
 
@@ -349,7 +350,7 @@ describe('Job', () => {
     it('adds a parallelize and a map_partitions step', () => {
       const partitioner: Partitioner = (key) => key as number;
 
-      const job = new Job({ worker: WORKER_A })
+      const job = new Job({ enqueuer: ENQUEUER_A })
         .load({ prefix: 'path/to/destination', partitions: 8, partitioner, concurrency: 8 });
 
       expect(job.steps).toHaveLength(2);
@@ -357,7 +358,7 @@ describe('Job', () => {
       expect(job.steps[0]).toMatchObject({
         action: Actions.PARALLELIZE,
         partitions: 8,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
       });
 
@@ -365,30 +366,30 @@ describe('Job', () => {
         action: Actions.MAP_PARTITIONS,
         partitions: 8,
         partitioner,
-        worker: WORKER_A,
+        enqueuer: ENQUEUER_A,
         before: null,
       });
     });
 
-    it('respects the passed worker', () => {
+    it('respects the passed enqueuer', () => {
       const partitioner: Partitioner = (key) => key as number;
 
-      const job = new Job({ worker: WORKER_A }).load({
+      const job = new Job({ enqueuer: ENQUEUER_A }).load({
         prefix: 'path/to/destination',
         partitions: 8,
         partitioner,
         concurrency: 8,
-        worker: WORKER_B,
+        enqueuer: ENQUEUER_B,
       });
 
-      expect(job.steps[0].worker).toBe(WORKER_B);
-      expect(job.steps[1].worker).toBe(WORKER_B);
+      expect(job.steps[0].enqueuer).toBe(ENQUEUER_B);
+      expect(job.steps[1].enqueuer).toBe(ENQUEUER_B);
     });
   });
 
   describe('immutability', () => {
     it('does not mutate the previous job when adding a step', () => {
-      const previous = new Job({ worker: WORKER_A })
+      const previous = new Job({ enqueuer: ENQUEUER_A })
         .parallelize(() => [], { partitions: 4 });
 
       const next = previous.map(() => []);

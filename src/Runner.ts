@@ -240,7 +240,7 @@ export class Runner<Args extends unknown[] = unknown[]> {
       const stopped = await redisQueue.stopped();
 
       if (!stopped) {
-        const enqueuer = krapsConfig.enqueuer;
+        const enqueuer = step.enqueuer ?? krapsConfig.enqueuer;
 
         const basePayload: RunnerPayload = {
           jobIndex,
@@ -254,7 +254,7 @@ export class Runner<Args extends unknown[] = unknown[]> {
         for (let index = 0; index < jobCount; index++) {
           if (await redisQueue.stopped()) break;
 
-          await enqueuer(step.worker, JSON.stringify(basePayload));
+          await enqueuer(JSON.stringify(basePayload));
         }
       }
 
