@@ -34,7 +34,7 @@ export function inlineWorkerEnqueuer(): ConfigureOptions['enqueuer'] {
   return async (_worker, json) => {
     const worker = new Worker(json, { memoryLimit: 128 * 1024 * 1024, chunkLimit: 64, concurrency: 8 });
 
-    await worker.call({ retries: 0 });
+    await worker.run({ retries: 0 });
   };
 }
 

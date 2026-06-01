@@ -19,7 +19,7 @@ describe('Runner end-to-end', () => {
     const store: Record<string, number> = {};
 
     class SearchCounter {
-      call(): Job<string, number> {
+      run(): Job<string, number> {
         return new Job({ worker: KRAPS_WORKER })
           .parallelize(function* () {
             for (let index = 1; index <= 9; index++) yield `key${index}`;
@@ -38,7 +38,7 @@ describe('Runner end-to-end', () => {
 
     jobClasses.SearchCounter = SearchCounter;
 
-    await new Runner(SearchCounter).call();
+    await new Runner(SearchCounter).run();
 
     expect(store).toEqual({
       key1: 3, key2: 6, key3: 9, key4: 12, key5: 15,
@@ -53,7 +53,7 @@ describe('Runner end-to-end', () => {
     class Counter {
       constructor(private readonly multiplier: number) {}
 
-      call(): Job<string, number> {
+      run(): Job<string, number> {
         const multiplier = this.multiplier;
 
         return new Job({ worker: KRAPS_WORKER })
@@ -72,7 +72,7 @@ describe('Runner end-to-end', () => {
 
     jobClasses.Counter = Counter;
 
-    await new Runner(Counter).call(2);
+    await new Runner(Counter).run(2);
 
     expect(store).toEqual({ key1: 2, key2: 4, key3: 6 });
   });
@@ -84,7 +84,7 @@ describe('Runner end-to-end', () => {
     const partitioner: Partitioner<string> = hashPartitioner as Partitioner<string>;
 
     class DumpLoad {
-      call(): [Job<string, number>, Job<string, number>] {
+      run(): [Job<string, number>, Job<string, number>] {
         const writeJob = new Job({ worker: KRAPS_WORKER })
           .parallelize(function* () {
             for (let index = 1; index <= 9; index++) yield `key${index}`;
@@ -115,7 +115,7 @@ describe('Runner end-to-end', () => {
 
     jobClasses.DumpLoad = DumpLoad;
 
-    await new Runner(DumpLoad).call();
+    await new Runner(DumpLoad).run();
 
     collected.sort((leftEntry, rightEntry) => leftEntry[0] - rightEntry[0]);
 
@@ -134,7 +134,7 @@ describe('Runner end-to-end', () => {
     const store: Record<string, number> = {};
 
     class Counter {
-      call(): Job<string, number> {
+      run(): Job<string, number> {
         return new Job({ worker: KRAPS_WORKER })
           .parallelize(function* () {
             for (let index = 1; index <= 9; index++) yield `key${index}`;
@@ -153,7 +153,7 @@ describe('Runner end-to-end', () => {
 
     jobClasses.Counter = Counter;
 
-    await new Runner(Counter).call();
+    await new Runner(Counter).run();
 
     expect(store).toEqual({
       key1: 3, key2: 6, key3: 9, key4: 12, key5: 15,
@@ -166,7 +166,7 @@ describe('Runner end-to-end', () => {
     const store: [string, number][] = [];
 
     class Appender {
-      call(): Job<string, number> {
+      run(): Job<string, number> {
         const leftJob = new Job({ worker: KRAPS_WORKER })
           .parallelize(() => [1] as number[], { partitions: 8 })
           .map(function* () {
@@ -193,7 +193,7 @@ describe('Runner end-to-end', () => {
 
     jobClasses.Appender = Appender;
 
-    await new Runner(Appender).call();
+    await new Runner(Appender).run();
 
     const sorted = [...store].sort((leftPair, rightPair) => {
       const keyOrder = leftPair[0].localeCompare(rightPair[0]);
@@ -217,7 +217,7 @@ describe('Runner end-to-end', () => {
     const store: Record<string, number> = {};
 
     class Combiner {
-      call(): Job<string, number> {
+      run(): Job<string, number> {
         const job1 = new Job({ worker: KRAPS_WORKER })
           .parallelize(() => [1] as number[], { partitions: 8 })
           .map(function* () {
@@ -250,7 +250,7 @@ describe('Runner end-to-end', () => {
 
     jobClasses.Combiner = Combiner;
 
-    await new Runner(Combiner).call();
+    await new Runner(Combiner).run();
 
     expect(store).toEqual({ key1: 6, key2: 6, key3: 6 });
   });
@@ -262,7 +262,7 @@ describe('Runner end-to-end', () => {
     let reduceCalls = 0;
 
     class Shared {
-      call(): [Job<string, number>, Job<string, number>] {
+      run(): [Job<string, number>, Job<string, number>] {
         const reducedJob = new Job({ worker: KRAPS_WORKER })
           .parallelize(function* () {
             parallelizeCalls += 1;
@@ -290,7 +290,7 @@ describe('Runner end-to-end', () => {
 
     jobClasses.Shared = Shared;
 
-    await new Runner(Shared).call();
+    await new Runner(Shared).run();
 
     expect(parallelizeCalls).toBe(1);
     expect(mapCalls).toBe(1);
@@ -301,13 +301,13 @@ describe('Runner end-to-end', () => {
     const enqueuer = vi.fn(async (_worker: unknown, json: string) => {
       const worker = new Worker(json, { memoryLimit: 128 * 1024 * 1024, chunkLimit: 64, concurrency: 8 });
 
-      await worker.call({ retries: 0 });
+      await worker.run({ retries: 0 });
     });
 
     const { jobClasses } = await setupKraps({ enqueuer });
 
     class Pipeline {
-      call(): Job<string, number> {
+      run(): Job<string, number> {
         return new Job({ worker: KRAPS_WORKER })
           .parallelize(() => ['item1', 'item2'], { partitions: 4 })
           .map(function* (key) {
@@ -319,7 +319,7 @@ describe('Runner end-to-end', () => {
 
     jobClasses.Pipeline = Pipeline;
 
-    await new Runner(Pipeline).call();
+    await new Runner(Pipeline).run();
 
     const calls = enqueuer.mock.calls.map(([, payload]) => JSON.parse(payload as string));
 
@@ -339,13 +339,13 @@ describe('Runner end-to-end', () => {
     const enqueuer = vi.fn(async (_worker: unknown, json: string) => {
       const worker = new Worker(json, { memoryLimit: 128 * 1024 * 1024, chunkLimit: 64, concurrency: 8 });
 
-      await worker.call({ retries: 0 });
+      await worker.run({ retries: 0 });
     });
 
     const { jobClasses } = await setupKraps({ enqueuer });
 
     class Capped {
-      call(): Job<string, number> {
+      run(): Job<string, number> {
         return new Job({ worker: KRAPS_WORKER })
           .parallelize(() => ['item1', 'item2'], { partitions: 4 })
           .map(function* (key) {
@@ -356,7 +356,7 @@ describe('Runner end-to-end', () => {
 
     jobClasses.Capped = Capped;
 
-    await new Runner(Capped).call();
+    await new Runner(Capped).run();
 
     const mapCalls = enqueuer.mock.calls.filter(([, payload]) => {
       const parsed = JSON.parse(payload as string);
@@ -372,7 +372,7 @@ describe('Runner end-to-end', () => {
     const stoppedSpy = vi.spyOn(RedisQueue.prototype, 'stopped').mockResolvedValue(true);
 
     class Stoppable {
-      call(): Job<string, null> {
+      run(): Job<string, null> {
         return new Job({ worker: KRAPS_WORKER })
           .parallelize(function* () {
             for (let index = 1; index <= 9; index++) yield `key${index}`;
@@ -383,7 +383,7 @@ describe('Runner end-to-end', () => {
 
     jobClasses.Stoppable = Stoppable;
 
-    await expect(new Runner(Stoppable).call()).rejects.toThrow(JobStopped);
+    await expect(new Runner(Stoppable).run()).rejects.toThrow(JobStopped);
 
     stoppedSpy.mockRestore();
   });

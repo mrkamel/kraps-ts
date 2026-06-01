@@ -54,7 +54,7 @@ import { Job } from 'kraps';
 class SearchLogCounter {
   constructor(private readonly startDate: string, private readonly endDate: string) {}
 
-  call() {
+  run() {
     const startDate = this.startDate;
     const endDate = this.endDate;
 
@@ -114,7 +114,7 @@ async function handleKrapsJob(json: string) {
     concurrency: 8,
   });
 
-  await worker.call({ retries: 3 });
+  await worker.run({ retries: 3 });
 }
 ```
 
@@ -128,7 +128,7 @@ async function handleKrapsJob(json: string) {
 ```ts
 import { Runner } from 'kraps';
 
-await new Runner(SearchLogCounter).call('2018-01-01', '2022-01-01');
+await new Runner(SearchLogCounter).run('2018-01-01', '2022-01-01');
 ```
 
 ## Job API
@@ -151,7 +151,7 @@ optional where every field has a default.
 
 `partitioner` defaults to `hashPartitioner`. `jobs` caps the number of
 wake-ups the runner pushes for that step (one wake-up triggers one
-`Worker.call`; if your workers are long-lived and drain the queue per call,
+`Worker.run`; if your workers are long-lived and drain the queue per run,
 set `jobs` close to your worker concurrency to avoid no-op wake-ups).
 
 `combine` combines the results of two jobs by joining every key available in
@@ -160,7 +160,7 @@ does not have a corresponding key, `null` is passed to the block. **Keys which
 are only available in `otherJob` are completely omitted** (left-outer join,
 not full-outer). The keys, partitioners and number of partitions must match
 between the two jobs, and `otherJob` must be reduced (every key unique).
-`otherJob` does not need to be listed in the array returned from `call()` —
+`otherJob` does not need to be listed in the array returned from `run()` —
 kraps detects the dependency.
 
 `append` requires the partitioners and number of partitions to match between

@@ -10,7 +10,7 @@ import { RedisQueue } from './RedisQueue';
 import { Step } from './Step';
 
 type JobClass<Args extends unknown[] = unknown[]> = new (...args: Args) => {
-  call(): AnyJob | AnyJob[] | Promise<AnyJob | AnyJob[]>,
+  run(): AnyJob | AnyJob[] | Promise<AnyJob | AnyJob[]>,
 };
 
 type RunnerPayload = {
@@ -35,10 +35,10 @@ export class Runner<Args extends unknown[] = unknown[]> {
     this.className = klass.name;
   }
 
-  async call(...args: Args): Promise<void> {
+  async run(...args: Args): Promise<void> {
     const instance = new this.klass(...args);
-    const callResult = await instance.call();
-    const jobs = resolveJobs(callResult);
+    const result = await instance.run();
+    const jobs = resolveJobs(result);
 
     this.totalJobs = jobs.length;
 

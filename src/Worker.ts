@@ -59,7 +59,7 @@ export class Worker {
     this.logger = logger;
   }
 
-  async call({ retries = 3 }: { retries?: number } = {}): Promise<void> {
+  async run({ retries = 3 }: { retries?: number } = {}): Promise<void> {
     const redisQueue = this.redisQueue();
 
     if (await redisQueue.stopped()) return;
@@ -378,7 +378,7 @@ export class Worker {
     if (!JobClass) throw new InvalidJob(`Unknown job class ${this.args.klass}; did you register it?`);
 
     const instance = new JobClass(...this.args.args);
-    const result = await instance.call();
+    const result = await instance.run();
 
     this.jobsCache = resolveJobs(result as AnyJob | AnyJob[]);
   }

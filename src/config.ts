@@ -6,7 +6,7 @@ export type Enqueuer = (worker: unknown, json: string) => void | Promise<void>;
 
 export type JobClassRegistry = Record<
   string,
-  new (...args: any[]) => { call(): AnyJob | AnyJob[] | Promise<AnyJob | AnyJob[]> }
+  new (...args: any[]) => { run(): AnyJob | AnyJob[] | Promise<AnyJob | AnyJob[]> }
 >;
 
 export type KrapsConfig = {

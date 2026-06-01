@@ -43,7 +43,7 @@ describe('Worker', () => {
     let beforeCalled = false;
 
     class BeforeJob {
-      call(): Job<any, any> {
+      run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [], { partitions: 8, before: () => { beforeCalled = true; } });
       }
@@ -60,7 +60,7 @@ describe('Worker', () => {
       jobIndex: 0,
       stepIndex: 0,
       frame: {},
-    }).call({ retries: 0 });
+    }).run({ retries: 0 });
 
     expect(beforeCalled).toBe(true);
   });
@@ -70,7 +70,7 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class ParallelizeJob {
-      call(): Job<any, any> {
+      run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => ['item1', 'item2', 'item3'], { partitions: 8 });
       }
@@ -87,7 +87,7 @@ describe('Worker', () => {
       jobIndex: 0,
       stepIndex: 0,
       frame: {},
-    }).call({ retries: 0 });
+    }).run({ retries: 0 });
 
     const expectedPartition = hashPartitioner('item1', 8);
     const objectName = `prefix/${TOKEN}/${expectedPartition}/chunk.0.json`;
@@ -101,7 +101,7 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class MapJob {
-      call(): Job<any, any> {
+      run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 4 })
           .map((key) => [[key, 1] as [string, number]])
@@ -123,7 +123,7 @@ describe('Worker', () => {
       jobIndex: 0,
       stepIndex: 2,
       frame: { token: PREVIOUS_TOKEN, partitions: 4 },
-    }).call({ retries: 0 });
+    }).run({ retries: 0 });
 
     const previousFiles = (await driver.list()).filter((name) => name.startsWith(`prefix/${PREVIOUS_TOKEN}/`));
     const outputFiles = (await driver.list()).filter((name) => name.startsWith(`prefix/${TOKEN}/`));
@@ -144,7 +144,7 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class MapReduceJob {
-      call(): Job<any, any> {
+      run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 4 })
           .map((key) => [
@@ -170,7 +170,7 @@ describe('Worker', () => {
       jobIndex: 0,
       stepIndex: 1,
       frame: { token: PREVIOUS_TOKEN, partitions: 4 },
-    }).call({ retries: 0 });
+    }).run({ retries: 0 });
 
     const outputFiles = (await driver.list()).filter((name) => name.startsWith(`prefix/${TOKEN}/`));
     const allPairs = outputFiles.flatMap((name) => decode(driver, name));
@@ -190,7 +190,7 @@ describe('Worker', () => {
     const captured: [number, [unknown, unknown][]][] = [];
 
     class MapPartitionsJob {
-      call(): Job<any, any> {
+      run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 4 })
           .map((key) => [[key, 1] as [string, number]])
@@ -220,7 +220,7 @@ describe('Worker', () => {
       jobIndex: 0,
       stepIndex: 2,
       frame: { token: PREVIOUS_TOKEN, partitions: 4 },
-    }).call({ retries: 0 });
+    }).run({ retries: 0 });
 
     expect(captured).toEqual([
       [0, [['item1', 1], ['item2', 1], ['item3', 1], ['item3', 1]]],
@@ -242,7 +242,7 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class ReduceJob {
-      call(): Job<any, any> {
+      run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 4 })
           .map<string, number>(() => [])
@@ -274,7 +274,7 @@ describe('Worker', () => {
       jobIndex: 0,
       stepIndex: 2,
       frame: { token: PREVIOUS_TOKEN, partitions: 4 },
-    }).call({ retries: 0 });
+    }).run({ retries: 0 });
 
     const output = decode(driver, `prefix/${TOKEN}/0/chunk.0.json`);
 
@@ -292,7 +292,7 @@ describe('Worker', () => {
     const captured: [number, [unknown, unknown][]][] = [];
 
     class EachPartitionJob {
-      call(): Job<any, any> {
+      run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 4 })
           .eachPartition(async (partition, pairs) => {
@@ -319,7 +319,7 @@ describe('Worker', () => {
       jobIndex: 0,
       stepIndex: 1,
       frame: { token: PREVIOUS_TOKEN, partitions: 4 },
-    }).call({ retries: 0 });
+    }).run({ retries: 0 });
 
     expect(captured).toEqual([
       [0, [['item1', 1], ['item2', 1], ['item2', 3], ['item3', 2]]],
@@ -331,7 +331,7 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class AppendJob {
-      call(): Job<any, any>[] {
+      run(): Job<any, any>[] {
         const leftJob = new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 2 })
           .map<string, number>(() => []);
@@ -358,7 +358,7 @@ describe('Worker', () => {
       jobIndex: 2,
       stepIndex: 2,
       frame: { token: PREVIOUS_TOKEN, partitions: 2 },
-    }).call({ retries: 0 });
+    }).run({ retries: 0 });
 
     const outputFiles = (await driver.list()).filter((name) => name.startsWith(`prefix/${TOKEN}/`));
     const allPairs = outputFiles.flatMap((name) => decode(driver, name));
@@ -376,7 +376,7 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class CombineJob {
-      call(): Job<any, any>[] {
+      run(): Job<any, any>[] {
         const otherJob = new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 2 })
           .map<string, number>(() => [])
@@ -414,7 +414,7 @@ describe('Worker', () => {
       jobIndex: 1,
       stepIndex: 2,
       frame: { token: PREVIOUS_TOKEN, partitions: 2 },
-    }).call({ retries: 0 });
+    }).run({ retries: 0 });
 
     const outputFiles = (await driver.list()).filter((name) => name.startsWith(`prefix/${TOKEN}/`));
     const allPairs = outputFiles.flatMap((name) => decode(driver, name));
@@ -433,7 +433,7 @@ describe('Worker', () => {
     let beforeCalled = false;
 
     class StoppedJob {
-      call(): Job<any, any> {
+      run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [], { partitions: 4, before: () => { beforeCalled = true; } });
       }
@@ -451,7 +451,7 @@ describe('Worker', () => {
       jobIndex: 0,
       stepIndex: 0,
       frame: {},
-    }).call({ retries: 0 });
+    }).run({ retries: 0 });
 
     expect(beforeCalled).toBe(false);
   });
@@ -461,7 +461,7 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class BadJob {
-      call(): Job<any, any> {
+      run(): Job<any, any> {
         const job = new Job({ worker: 'KrapsWorker' }).parallelize(() => [], { partitions: 4 });
 
         job.steps[0].action = 'totally_unknown' as Action;
@@ -482,7 +482,7 @@ describe('Worker', () => {
         jobIndex: 0,
         stepIndex: 0,
         frame: {},
-      }).call({ retries: 0 }),
+      }).run({ retries: 0 }),
     ).rejects.toThrow('Invalid action');
   });
 });
