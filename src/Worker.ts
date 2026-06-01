@@ -1,6 +1,6 @@
 import { createReadStream } from 'fs';
 import { Actions } from './actions';
-import { getConfig } from './config';
+import { findJobClass, getConfig } from './config';
 import { downloadAll } from './downloader';
 import { InvalidAction, InvalidJob, InvalidStep, KrapsError } from './errors';
 import { Frame } from './Frame';
@@ -374,7 +374,7 @@ export class Worker {
   private async resolveJobsFromRegistry(): Promise<void> {
     if (this.jobsCache) return;
 
-    const JobClass = getConfig().jobClasses[this.args.klass];
+    const JobClass = findJobClass(this.args.klass);
     if (!JobClass) throw new InvalidJob(`Unknown job class ${this.args.klass}; did you register it?`);
 
     const instance = new JobClass(...this.args.args);

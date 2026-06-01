@@ -19,6 +19,8 @@ describe('Runner end-to-end', () => {
     const store: Record<string, number> = {};
 
     class SearchCounter {
+      static jobName = 'SearchCounter';
+
       run(): Job<string, number> {
         return new Job({ worker: KRAPS_WORKER })
           .parallelize(function* () {
@@ -36,7 +38,7 @@ describe('Runner end-to-end', () => {
       }
     }
 
-    jobClasses.SearchCounter = SearchCounter;
+    jobClasses.push(SearchCounter);
 
     await new Runner(SearchCounter).run();
 
@@ -51,6 +53,8 @@ describe('Runner end-to-end', () => {
     const store: Record<string, number> = {};
 
     class Counter {
+      static jobName = 'Counter';
+
       constructor(private readonly multiplier: number) {}
 
       run(): Job<string, number> {
@@ -70,7 +74,7 @@ describe('Runner end-to-end', () => {
       }
     }
 
-    jobClasses.Counter = Counter;
+    jobClasses.push(Counter);
 
     await new Runner(Counter).run(2);
 
@@ -84,6 +88,8 @@ describe('Runner end-to-end', () => {
     const partitioner: Partitioner<string> = hashPartitioner as Partitioner<string>;
 
     class DumpLoad {
+      static jobName = 'DumpLoad';
+
       run(): [Job<string, number>, Job<string, number>] {
         const writeJob = new Job({ worker: KRAPS_WORKER })
           .parallelize(function* () {
@@ -113,7 +119,7 @@ describe('Runner end-to-end', () => {
       }
     }
 
-    jobClasses.DumpLoad = DumpLoad;
+    jobClasses.push(DumpLoad);
 
     await new Runner(DumpLoad).run();
 
@@ -134,6 +140,8 @@ describe('Runner end-to-end', () => {
     const store: Record<string, number> = {};
 
     class Counter {
+      static jobName = 'Counter';
+
       run(): Job<string, number> {
         return new Job({ worker: KRAPS_WORKER })
           .parallelize(function* () {
@@ -151,7 +159,7 @@ describe('Runner end-to-end', () => {
       }
     }
 
-    jobClasses.Counter = Counter;
+    jobClasses.push(Counter);
 
     await new Runner(Counter).run();
 
@@ -166,6 +174,8 @@ describe('Runner end-to-end', () => {
     const store: [string, number][] = [];
 
     class Appender {
+      static jobName = 'Appender';
+
       run(): Job<string, number> {
         const leftJob = new Job({ worker: KRAPS_WORKER })
           .parallelize(() => [1] as number[], { partitions: 8 })
@@ -191,7 +201,7 @@ describe('Runner end-to-end', () => {
       }
     }
 
-    jobClasses.Appender = Appender;
+    jobClasses.push(Appender);
 
     await new Runner(Appender).run();
 
@@ -217,6 +227,8 @@ describe('Runner end-to-end', () => {
     const store: Record<string, number> = {};
 
     class Combiner {
+      static jobName = 'Combiner';
+
       run(): Job<string, number> {
         const job1 = new Job({ worker: KRAPS_WORKER })
           .parallelize(() => [1] as number[], { partitions: 8 })
@@ -248,7 +260,7 @@ describe('Runner end-to-end', () => {
       }
     }
 
-    jobClasses.Combiner = Combiner;
+    jobClasses.push(Combiner);
 
     await new Runner(Combiner).run();
 
@@ -262,6 +274,8 @@ describe('Runner end-to-end', () => {
     let reduceCalls = 0;
 
     class Shared {
+      static jobName = 'Shared';
+
       run(): [Job<string, number>, Job<string, number>] {
         const reducedJob = new Job({ worker: KRAPS_WORKER })
           .parallelize(function* () {
@@ -288,7 +302,7 @@ describe('Runner end-to-end', () => {
       }
     }
 
-    jobClasses.Shared = Shared;
+    jobClasses.push(Shared);
 
     await new Runner(Shared).run();
 
@@ -307,6 +321,8 @@ describe('Runner end-to-end', () => {
     const { jobClasses } = await setupKraps({ enqueuer });
 
     class Pipeline {
+      static jobName = 'Pipeline';
+
       run(): Job<string, number> {
         return new Job({ worker: KRAPS_WORKER })
           .parallelize(() => ['item1', 'item2'], { partitions: 4 })
@@ -317,7 +333,7 @@ describe('Runner end-to-end', () => {
       }
     }
 
-    jobClasses.Pipeline = Pipeline;
+    jobClasses.push(Pipeline);
 
     await new Runner(Pipeline).run();
 
@@ -345,6 +361,8 @@ describe('Runner end-to-end', () => {
     const { jobClasses } = await setupKraps({ enqueuer });
 
     class Capped {
+      static jobName = 'Capped';
+
       run(): Job<string, number> {
         return new Job({ worker: KRAPS_WORKER })
           .parallelize(() => ['item1', 'item2'], { partitions: 4 })
@@ -354,7 +372,7 @@ describe('Runner end-to-end', () => {
       }
     }
 
-    jobClasses.Capped = Capped;
+    jobClasses.push(Capped);
 
     await new Runner(Capped).run();
 
@@ -372,6 +390,8 @@ describe('Runner end-to-end', () => {
     const stoppedSpy = vi.spyOn(RedisQueue.prototype, 'stopped').mockResolvedValue(true);
 
     class Stoppable {
+      static jobName = 'Stoppable';
+
       run(): Job<string, null> {
         return new Job({ worker: KRAPS_WORKER })
           .parallelize(function* () {
@@ -381,7 +401,7 @@ describe('Runner end-to-end', () => {
       }
     }
 
-    jobClasses.Stoppable = Stoppable;
+    jobClasses.push(Stoppable);
 
     await expect(new Runner(Stoppable).run()).rejects.toThrow(JobStopped);
 

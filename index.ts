@@ -17,6 +17,7 @@ export {
   InvalidChunkLimit,
 } from './src/errors';
 export { hashPartitioner, type Partitioner } from './src/hashPartitioner';
+export { type KrapsJob, type KrapsJobClass } from './src/KrapsJob';
 export { type Driver, type StoreInput, type StoreOptions } from './src/drivers/Driver';
 export { FakeDriver } from './src/drivers/FakeDriver';
 export { S3Driver } from './src/drivers/S3Driver';

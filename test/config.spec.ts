@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Redis } from 'ioredis';
-import { configure, getConfig } from '../src/config';
+import { configure, findJobClass, getConfig } from '../src/config';
 import { FakeDriver } from '../src/drivers/FakeDriver';
+import { KrapsJob } from '../src/KrapsJob';
 
 function buildDriver(): FakeDriver {
   return new FakeDriver({ bucket: 'bucket' });
@@ -51,5 +52,77 @@ describe('config', () => {
     expect(config.namespace).toBe(null);
     expect(config.jobTtl).toBe(4 * 24 * 60 * 60);
     expect(config.showProgress).toBe(true);
+  });
+
+  describe('jobClasses', () => {
+    class Good implements KrapsJob {
+      static jobName = 'Good';
+
+      run(): any {
+        return null;
+      }
+    }
+
+    it('stores the array and finds classes by jobName', () => {
+      configure({ driver: buildDriver(), redis: buildRedis(), jobClasses: [Good] });
+
+      expect(getConfig().jobClasses).toEqual([Good]);
+      expect(findJobClass('Good')).toBe(Good);
+      expect(findJobClass('Missing')).toBeUndefined();
+    });
+
+    it('throws when a class is missing static jobName', () => {
+      class Bad {
+        run(): any {
+          return null;
+        }
+      }
+
+      expect(() => configure({
+        driver: buildDriver(),
+        redis: buildRedis(),
+        jobClasses: [Bad as any],
+      })).toThrow(/missing a static jobName/);
+    });
+
+    it('throws when jobName is an empty string', () => {
+      class Empty {
+        static jobName = '';
+
+        run(): any {
+          return null;
+        }
+      }
+
+      expect(() => configure({
+        driver: buildDriver(),
+        redis: buildRedis(),
+        jobClasses: [Empty],
+      })).toThrow(/non-empty string/);
+    });
+
+    it('throws when two classes share a jobName', () => {
+      class A {
+        static jobName = 'Same';
+
+        run(): any {
+          return null;
+        }
+      }
+
+      class B {
+        static jobName = 'Same';
+
+        run(): any {
+          return null;
+        }
+      }
+
+      expect(() => configure({
+        driver: buildDriver(),
+        redis: buildRedis(),
+        jobClasses: [A, B],
+      })).toThrow(/duplicate jobName "Same"/);
+    });
   });
 });

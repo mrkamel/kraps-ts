@@ -6,12 +6,9 @@ import { IncompatibleFrame, InvalidAction, JobStopped } from './errors';
 import { Frame } from './Frame';
 import { Interval } from './Interval';
 import { AnyJob, resolveJobs } from './jobResolver';
+import { KrapsJobClass } from './KrapsJob';
 import { RedisQueue } from './RedisQueue';
 import { Step } from './Step';
-
-type JobClass<Args extends unknown[] = unknown[]> = new (...args: Args) => {
-  run(): AnyJob | AnyJob[] | Promise<AnyJob | AnyJob[]>,
-};
 
 type RunnerPayload = {
   jobIndex: number,
@@ -26,13 +23,13 @@ const POLL_INTERVAL_MILLIS = 1_000;
 const PROGRESS_UPDATE_INTERVAL_MILLIS = 1_000;
 
 export class Runner<Args extends unknown[] = unknown[]> {
-  private readonly klass: JobClass<Args>;
+  private readonly klass: KrapsJobClass<Args>;
   private readonly className: string;
   private totalJobs = 0;
 
-  constructor(klass: JobClass<Args>) {
+  constructor(klass: KrapsJobClass<Args>) {
     this.klass = klass;
-    this.className = klass.name;
+    this.className = klass.jobName;
   }
 
   async run(...args: Args): Promise<void> {

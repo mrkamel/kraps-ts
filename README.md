@@ -37,7 +37,7 @@ configure({
     // hand off the job to your background queue
     await myQueue.add(worker as string, { json });
   },
-  jobClasses: { SearchLogCounter },  // see "Define a job" below
+  jobClasses: [SearchLogCounter],  // see "Define a job" below
 });
 ```
 
@@ -49,9 +49,11 @@ eager outputs and generators (`function*` / `async function*`) for lazy
 production.
 
 ```ts
-import { Job } from 'kraps';
+import { Job, KrapsJob } from 'kraps';
 
-class SearchLogCounter {
+class SearchLogCounter implements KrapsJob {
+  static jobName = 'SearchLogCounter';
+
   constructor(private readonly startDate: string, private readonly endDate: string) {}
 
   run() {
@@ -96,8 +98,12 @@ keys/values.
 `endDate` above) — this is a JavaScript language limitation, not a kraps one.
 
 **Pipeline registration:** the worker process rebuilds the job graph from the
-payload's `klass` name, so every class you run must appear in `jobClasses`
-passed to `configure()`.
+payload's `klass` name (resolved via the class's `static jobName`), so every
+class you run must appear in the `jobClasses` array passed to `configure()`.
+Each class must implement `KrapsJob` (instance `run()`) and declare a
+`static jobName` string. The static name is the identifier sent over the
+wire — using a string literal here keeps it stable across bundler
+minification and HMR, which `klass.name` is not.
 
 ## Worker
 

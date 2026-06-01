@@ -43,13 +43,15 @@ describe('Worker', () => {
     let beforeCalled = false;
 
     class BeforeJob {
+      static jobName = 'BeforeJob';
+
       run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [], { partitions: 8, before: () => { beforeCalled = true; } });
       }
     }
 
-    jobClasses.BeforeJob = BeforeJob;
+    jobClasses.push(BeforeJob);
 
     await queue.enqueue({ item: 'item1', part: '0' });
 
@@ -70,13 +72,15 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class ParallelizeJob {
+      static jobName = 'ParallelizeJob';
+
       run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => ['item1', 'item2', 'item3'], { partitions: 8 });
       }
     }
 
-    jobClasses.ParallelizeJob = ParallelizeJob;
+    jobClasses.push(ParallelizeJob);
 
     await queue.enqueue({ item: 'item1', part: '0' });
 
@@ -101,6 +105,8 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class MapJob {
+      static jobName = 'MapJob';
+
       run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 4 })
@@ -109,7 +115,7 @@ describe('Worker', () => {
       }
     }
 
-    jobClasses.MapJob = MapJob;
+    jobClasses.push(MapJob);
 
     const chunk = gzipPairLines([['item1', 1], ['item2', 1]]);
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, chunk);
@@ -144,6 +150,8 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class MapReduceJob {
+      static jobName = 'MapReduceJob';
+
       run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 4 })
@@ -156,7 +164,7 @@ describe('Worker', () => {
       }
     }
 
-    jobClasses.MapReduceJob = MapReduceJob;
+    jobClasses.push(MapReduceJob);
 
     const chunk = gzipPairLines([['item1', null], ['item2', null]]);
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, chunk);
@@ -190,6 +198,8 @@ describe('Worker', () => {
     const captured: [number, [unknown, unknown][]][] = [];
 
     class MapPartitionsJob {
+      static jobName = 'MapPartitionsJob';
+
       run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 4 })
@@ -206,7 +216,7 @@ describe('Worker', () => {
       }
     }
 
-    jobClasses.MapPartitionsJob = MapPartitionsJob;
+    jobClasses.push(MapPartitionsJob);
 
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, gzipPairLines([['item1', 1], ['item3', 1]]));
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.1.json`, gzipPairLines([['item2', 1], ['item3', 1]]));
@@ -242,6 +252,8 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class ReduceJob {
+      static jobName = 'ReduceJob';
+
       run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 4 })
@@ -250,7 +262,7 @@ describe('Worker', () => {
       }
     }
 
-    jobClasses.ReduceJob = ReduceJob;
+    jobClasses.push(ReduceJob);
 
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, gzipPairLines([
       ['item1', 1],
@@ -292,6 +304,8 @@ describe('Worker', () => {
     const captured: [number, [unknown, unknown][]][] = [];
 
     class EachPartitionJob {
+      static jobName = 'EachPartitionJob';
+
       run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 4 })
@@ -305,7 +319,7 @@ describe('Worker', () => {
       }
     }
 
-    jobClasses.EachPartitionJob = EachPartitionJob;
+    jobClasses.push(EachPartitionJob);
 
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, gzipPairLines([['item1', 1], ['item2', 3]]));
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.1.json`, gzipPairLines([['item2', 1], ['item3', 2]]));
@@ -331,6 +345,8 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class AppendJob {
+      static jobName = 'AppendJob';
+
       run(): Job<any, any>[] {
         const leftJob = new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 2 })
@@ -344,7 +360,7 @@ describe('Worker', () => {
       }
     }
 
-    jobClasses.AppendJob = AppendJob;
+    jobClasses.push(AppendJob);
 
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, gzipPairLines([['key1', 1], ['key2', 2]]));
     await driver.store('prefix/append_token/0/chunk.0.json', gzipPairLines([['keyA', 10], ['keyB', 20]]));
@@ -376,6 +392,8 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class CombineJob {
+      static jobName = 'CombineJob';
+
       run(): Job<any, any>[] {
         const otherJob = new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [] as string[], { partitions: 2 })
@@ -393,7 +411,7 @@ describe('Worker', () => {
       }
     }
 
-    jobClasses.CombineJob = CombineJob;
+    jobClasses.push(CombineJob);
 
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, gzipPairLines([
       ['shared', 1],
@@ -433,13 +451,15 @@ describe('Worker', () => {
     let beforeCalled = false;
 
     class StoppedJob {
+      static jobName = 'StoppedJob';
+
       run(): Job<any, any> {
         return new Job({ worker: 'KrapsWorker' })
           .parallelize(() => [], { partitions: 4, before: () => { beforeCalled = true; } });
       }
     }
 
-    jobClasses.StoppedJob = StoppedJob;
+    jobClasses.push(StoppedJob);
 
     await queue.enqueue({ item: 'item1', part: '0' });
     await queue.stop();
@@ -461,6 +481,8 @@ describe('Worker', () => {
     const queue = buildQueue(redis);
 
     class BadJob {
+      static jobName = 'BadJob';
+
       run(): Job<any, any> {
         const job = new Job({ worker: 'KrapsWorker' }).parallelize(() => [], { partitions: 4 });
 
@@ -470,7 +492,7 @@ describe('Worker', () => {
       }
     }
 
-    jobClasses.BadJob = BadJob;
+    jobClasses.push(BadJob);
 
     await queue.enqueue({ item: 'x', part: '0' });
 

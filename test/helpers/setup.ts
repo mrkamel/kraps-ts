@@ -15,7 +15,7 @@ export async function setupKraps(overrides: SetupOverrides = {}): Promise<{
 }> {
   const driver = new FakeDriver({ bucket: 'bucket', prefix: 'prefix' });
   const redis = new Redis({ db: REDIS_DB });
-  const jobClasses: JobClassRegistry = {};
+  const jobClasses: JobClassRegistry = [];
 
   await redis.flushdb();
 
