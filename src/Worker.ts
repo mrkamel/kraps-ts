@@ -1,6 +1,6 @@
 import { createReadStream } from 'fs';
 import { Actions } from './actions';
-import { getConfig } from './config';
+import { findJobClass, getConfig } from './config';
 import { downloadAll } from './downloader';
 import { InvalidAction, InvalidJob, InvalidStep, KrapsError } from './errors';
 import { Frame } from './Frame';
@@ -59,7 +59,7 @@ export class Worker {
     this.logger = logger;
   }
 
-  async call({ retries = 3 }: { retries?: number } = {}): Promise<void> {
+  async run({ retries = 3 }: { retries?: number } = {}): Promise<void> {
     const redisQueue = this.redisQueue();
 
     if (await redisQueue.stopped()) return;
@@ -374,11 +374,11 @@ export class Worker {
   private async resolveJobsFromRegistry(): Promise<void> {
     if (this.jobsCache) return;
 
-    const JobClass = getConfig().jobClasses[this.args.klass];
+    const JobClass = findJobClass(this.args.klass);
     if (!JobClass) throw new InvalidJob(`Unknown job class ${this.args.klass}; did you register it?`);
 
     const instance = new JobClass(...this.args.args);
-    const result = await instance.call();
+    const result = await instance.run();
 
     this.jobsCache = resolveJobs(result as AnyJob | AnyJob[]);
   }

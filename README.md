@@ -33,11 +33,11 @@ configure({
   namespace: 'my-application',  // optional, used as a redis key prefix
   jobTtl: 7 * 24 * 60 * 60,     // optional, default 4 days (seconds)
   showProgress: true,            // optional, default true; prints a TTY progress bar per step
-  enqueuer: async (worker, json) => {
+  enqueuer: async (json) => {
     // hand off the job to your background queue
-    await myQueue.add(worker as string, { json });
+    await myQueue.add('KrapsWorker', { json });
   },
-  jobClasses: { SearchLogCounter },  // see "Define a job" below
+  jobClasses: [SearchLogCounter],  // see "Define a job" below
 });
 ```
 
@@ -49,16 +49,18 @@ eager outputs and generators (`function*` / `async function*`) for lazy
 production.
 
 ```ts
-import { Job } from 'kraps';
+import { Job, KrapsJob } from 'kraps';
 
-class SearchLogCounter {
+class SearchLogCounter implements KrapsJob {
+  static jobName = 'SearchLogCounter';
+
   constructor(private readonly startDate: string, private readonly endDate: string) {}
 
-  call() {
+  run() {
     const startDate = this.startDate;
     const endDate = this.endDate;
 
-    return new Job({ worker: 'KrapsWorker' })
+    return new Job()
       .parallelize(function* () {
         for (let date = new Date(startDate); date <= new Date(endDate); date.setDate(date.getDate() + 1)) {
           yield date.toISOString().slice(0, 10);
@@ -96,13 +98,18 @@ keys/values.
 `endDate` above) — this is a JavaScript language limitation, not a kraps one.
 
 **Pipeline registration:** the worker process rebuilds the job graph from the
-payload's `klass` name, so every class you run must appear in `jobClasses`
-passed to `configure()`.
+payload's `klass` name (resolved via the class's `static jobName`), so every
+class you run must appear in the `jobClasses` array passed to `configure()`.
+Each class must implement `KrapsJob` (instance `run()`) and declare a
+`static jobName` string. The static name is the identifier sent over the
+wire — using a string literal here keeps it stable across bundler
+minification and HMR, which `klass.name` is not.
 
 ## Worker
 
-The `enqueuer` you configure receives the `worker` reference and a JSON
-payload. In the worker process, instantiate `Worker` to handle that payload:
+The `enqueuer` you configure receives a JSON payload and is responsible for
+handing it off to a background queue. In the worker process, instantiate
+`Worker` to handle that payload:
 
 ```ts
 import { Worker } from 'kraps';
@@ -114,7 +121,7 @@ async function handleKrapsJob(json: string) {
     concurrency: 8,
   });
 
-  await worker.call({ retries: 3 });
+  await worker.run({ retries: 3 });
 }
 ```
 
@@ -128,7 +135,7 @@ async function handleKrapsJob(json: string) {
 ```ts
 import { Runner } from 'kraps';
 
-await new Runner(SearchLogCounter).call('2018-01-01', '2022-01-01');
+await new Runner(SearchLogCounter).run('2018-01-01', '2022-01-01');
 ```
 
 ## Job API
@@ -138,20 +145,20 @@ optional where every field has a default.
 
 | Method | Block signature | Block returns |
 | --- | --- | --- |
-| `parallelize(block, { partitions, partitioner?, worker?, before? })` | `() => …` | `Iterable<NewKey> \| AsyncIterable<NewKey>` |
-| `map(block, { partitions?, partitioner?, jobs?, worker?, before? }?)` | `(key, value) => …` | `Iterable<[NewKey, NewValue]> \| AsyncIterable<…>` |
+| `parallelize(block, { partitions, partitioner?, enqueuer?, before? })` | `() => …` | `Iterable<NewKey> \| AsyncIterable<NewKey>` |
+| `map(block, { partitions?, partitioner?, jobs?, enqueuer?, before? }?)` | `(key, value) => …` | `Iterable<[NewKey, NewValue]> \| AsyncIterable<…>` |
 | `mapPartitions(block, { … }?)` | `(partition, pairs) => …` (pairs is `AsyncIterable<[Key, Value]>`, sorted) | same as `map` |
-| `reduce(block, { jobs?, worker?, before? }?)` | `(key, leftValue, rightValue) => Value \| Promise<Value>` | a single merged value |
-| `combine(otherJob, block, { jobs?, worker?, before? }?)` | `(key, leftValue, rightValue \| null) => …` (right is `null` when no match) | `Iterable<[Key, ResultValue]> \| AsyncIterable<…>` |
-| `append(otherJob, { jobs?, worker?, before? }?)` | — (no block) | — |
-| `eachPartition(block, { jobs?, worker?, before? }?)` | `(partition, pairs) => …` | `void \| Promise<void>` (side effects only) |
-| `repartition({ partitions, partitioner?, jobs?, worker?, before? })` | — | — |
-| `dump({ prefix, worker? })` | — | per-partition file written under `prefix/<n>/chunk.json` |
-| `load({ prefix, partitions, partitioner, concurrency, worker? })` | — | seeds a fresh job from previously dumped data |
+| `reduce(block, { jobs?, enqueuer?, before? }?)` | `(key, leftValue, rightValue) => Value \| Promise<Value>` | a single merged value |
+| `combine(otherJob, block, { jobs?, enqueuer?, before? }?)` | `(key, leftValue, rightValue \| null) => …` (right is `null` when no match) | `Iterable<[Key, ResultValue]> \| AsyncIterable<…>` |
+| `append(otherJob, { jobs?, enqueuer?, before? }?)` | — (no block) | — |
+| `eachPartition(block, { jobs?, enqueuer?, before? }?)` | `(partition, pairs) => …` | `void \| Promise<void>` (side effects only) |
+| `repartition({ partitions, partitioner?, jobs?, enqueuer?, before? })` | — | — |
+| `dump({ prefix, enqueuer? })` | — | per-partition file written under `prefix/<n>/chunk.json` |
+| `load({ prefix, partitions, partitioner, concurrency, enqueuer? })` | — | seeds a fresh job from previously dumped data |
 
 `partitioner` defaults to `hashPartitioner`. `jobs` caps the number of
 wake-ups the runner pushes for that step (one wake-up triggers one
-`Worker.call`; if your workers are long-lived and drain the queue per call,
+`Worker.run`; if your workers are long-lived and drain the queue per run,
 set `jobs` close to your worker concurrency to avoid no-op wake-ups).
 
 `combine` combines the results of two jobs by joining every key available in
@@ -160,7 +167,7 @@ does not have a corresponding key, `null` is passed to the block. **Keys which
 are only available in `otherJob` are completely omitted** (left-outer join,
 not full-outer). The keys, partitioners and number of partitions must match
 between the two jobs, and `otherJob` must be reduced (every key unique).
-`otherJob` does not need to be listed in the array returned from `call()` —
+`otherJob` does not need to be listed in the array returned from `run()` —
 kraps detects the dependency.
 
 `append` requires the partitioners and number of partitions to match between

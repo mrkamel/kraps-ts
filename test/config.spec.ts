@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { Redis } from 'ioredis';
-import { configure, getConfig } from '../src/config';
+import { configure, findJobClass, getConfig } from '../src/config';
 import { FakeDriver } from '../src/drivers/FakeDriver';
+import { KrapsJob } from '../src/KrapsJob';
 
 function buildDriver(): FakeDriver {
   return new FakeDriver({ bucket: 'bucket' });
@@ -15,6 +16,7 @@ describe('config', () => {
   it('sets all fields when fully specified', () => {
     const driver = buildDriver();
     const redis = buildRedis();
+    const enqueuer = async () => {};
 
     configure({
       driver,
@@ -22,6 +24,7 @@ describe('config', () => {
       namespace: 'namespace',
       jobTtl: 100,
       showProgress: true,
+      enqueuer,
     });
 
     const config = getConfig();
@@ -31,10 +34,11 @@ describe('config', () => {
     expect(config.namespace).toBe('namespace');
     expect(config.jobTtl).toBe(100);
     expect(config.showProgress).toBe(true);
+    expect(config.enqueuer).toBe(enqueuer);
   });
 
   it('applies the default jobTtl of 4 days when not specified', () => {
-    configure({ driver: buildDriver(), redis: buildRedis() });
+    configure({ driver: buildDriver(), redis: buildRedis(), enqueuer: async () => {} });
 
     expect(getConfig().jobTtl).toBe(4 * 24 * 60 * 60);
   });
@@ -43,13 +47,88 @@ describe('config', () => {
     const driver = buildDriver();
     const redis = buildRedis();
 
-    configure({ driver, redis, namespace: 'temporary', jobTtl: 42, showProgress: false });
-    configure({ driver, redis });
+    configure({ driver, redis, namespace: 'temporary', jobTtl: 42, showProgress: false, enqueuer: async () => {} });
+    configure({ driver, redis, enqueuer: async () => {} });
 
     const config = getConfig();
 
     expect(config.namespace).toBe(null);
     expect(config.jobTtl).toBe(4 * 24 * 60 * 60);
     expect(config.showProgress).toBe(true);
+  });
+
+  describe('jobClasses', () => {
+    class Good implements KrapsJob {
+      static jobName = 'Good';
+
+      run(): any {
+        return null;
+      }
+    }
+
+    it('stores the array and finds classes by jobName', () => {
+      configure({ driver: buildDriver(), redis: buildRedis(), jobClasses: [Good], enqueuer: async () => {} });
+
+      expect(getConfig().jobClasses).toEqual([Good]);
+      expect(findJobClass('Good')).toBe(Good);
+      expect(findJobClass('Missing')).toBeUndefined();
+    });
+
+    it('throws when a class is missing static jobName', () => {
+      class Bad {
+        run(): any {
+          return null;
+        }
+      }
+
+      expect(() => configure({
+        driver: buildDriver(),
+        redis: buildRedis(),
+        jobClasses: [Bad as any],
+        enqueuer: async () => {},
+      })).toThrow(/missing a static jobName/);
+    });
+
+    it('throws when jobName is an empty string', () => {
+      class Empty {
+        static jobName = '';
+
+        run(): any {
+          return null;
+        }
+      }
+
+      expect(() => configure({
+        driver: buildDriver(),
+        redis: buildRedis(),
+        jobClasses: [Empty],
+        enqueuer: async () => {},
+      })).toThrow(/non-empty string/);
+    });
+
+    it('throws when two classes share a jobName', () => {
+      class A {
+        static jobName = 'Same';
+
+        run(): any {
+          return null;
+        }
+      }
+
+      class B {
+        static jobName = 'Same';
+
+        run(): any {
+          return null;
+        }
+      }
+
+      expect(() => configure({
+        driver: buildDriver(),
+        redis: buildRedis(),
+        jobClasses: [A, B],
+        enqueuer: async () => {},
+      })).toThrow(/duplicate jobName "Same"/);
+    });
   });
 });

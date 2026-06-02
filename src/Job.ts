@@ -1,6 +1,6 @@
 import { Actions } from './actions';
 import { downloadAll } from './downloader';
-import { getConfig } from './config';
+import { Enqueuer, getConfig } from './config';
 import { Partitioner, hashPartitioner } from './hashPartitioner';
 import { JsonValue, KrapsKey } from './mapReduce/compare';
 import { readLines } from './mapReduce/lines';
@@ -41,18 +41,18 @@ export type EachPartitionBlock<Key extends KrapsKey, Value extends JsonValue> = 
 ) => void | Promise<void>;
 
 type BlockOptions = {
-  worker?: unknown,
+  enqueuer?: Enqueuer,
   before?: (() => void | Promise<void>) | null,
 };
 
 export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> {
   readonly steps: Step[];
-  private readonly worker: unknown;
+  private readonly enqueuer?: Enqueuer;
   private partitions: number;
   private partitioner: Partitioner;
 
-  constructor({ worker }: { worker: unknown }) {
-    this.worker = worker;
+  constructor({ enqueuer }: { enqueuer?: Enqueuer } = {}) {
+    this.enqueuer = enqueuer;
     this.steps = [];
     this.partitions = 0;
     this.partitioner = hashPartitioner;
@@ -70,7 +70,7 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
       action: Actions.PARALLELIZE,
       partitions: next.partitions,
       partitioner: next.partitioner,
-      worker: options.worker ?? this.worker,
+      enqueuer: options.enqueuer ?? this.enqueuer,
       before: options.before ?? null,
       block: block as StepBlock,
     });
@@ -104,7 +104,7 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
       jobs: cappedJobs,
       partitions: next.partitions,
       partitioner: next.partitioner,
-      worker: options.worker ?? this.worker,
+      enqueuer: options.enqueuer ?? this.enqueuer,
       before: options.before ?? null,
       block: block as StepBlock,
     });
@@ -125,7 +125,7 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
       jobs: cappedJobs,
       partitions: next.partitions,
       partitioner: next.partitioner,
-      worker: options.worker ?? this.worker,
+      enqueuer: options.enqueuer ?? this.enqueuer,
       before: options.before ?? null,
       block: block as StepBlock,
       dependency: other,
@@ -144,7 +144,7 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
       jobs: cappedJobs,
       partitions: next.partitions,
       partitioner: next.partitioner,
-      worker: options.worker ?? this.worker,
+      enqueuer: options.enqueuer ?? this.enqueuer,
       before: options.before ?? null,
       dependency: other,
       options: { appendStepIndex: other.steps.length - 1 },
@@ -165,7 +165,7 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
       jobs: cappedJobs,
       partitions: next.partitions,
       partitioner: next.partitioner,
-      worker: options.worker ?? this.worker,
+      enqueuer: options.enqueuer ?? this.enqueuer,
       before: options.before ?? null,
       block: block as StepBlock,
     });
@@ -179,7 +179,7 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
     return this.map<Key, Value>((key, value) => [[key, value] as [Key, Value]], options);
   }
 
-  dump(options: { prefix: string, worker?: unknown }): Job<Key, Value> {
+  dump(options: { prefix: string, enqueuer?: Enqueuer }): Job<Key, Value> {
     const prefix = options.prefix;
 
     return this.eachPartition(async (partition, pairs) => {
@@ -192,7 +192,7 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
       const body = lines.length > 0 ? `${lines.join('\n')}\n` : '';
 
       await getConfig().driver.store(`${prefix}/${partition}/chunk.json`, body);
-    }, { worker: options.worker ?? this.worker });
+    }, { enqueuer: options.enqueuer ?? this.enqueuer });
   }
 
   load<NewKey extends KrapsKey, NewValue extends JsonValue>(options: {
@@ -200,9 +200,9 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
     partitions: number,
     partitioner: Partitioner<NewKey>,
     concurrency: number,
-    worker?: unknown,
+    enqueuer?: Enqueuer,
   }): Job<NewKey, NewValue> {
-    const worker = options.worker ?? this.worker;
+    const enqueuer = options.enqueuer ?? this.enqueuer;
     const sourcePrefix = options.prefix;
     const concurrency = options.concurrency;
 
@@ -213,7 +213,7 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
       {
         partitions: options.partitions,
         partitioner: (key) => key,
-        worker,
+        enqueuer,
       },
     );
 
@@ -230,7 +230,7 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
           }
         }
       },
-      { partitioner: options.partitioner, worker },
+      { partitioner: options.partitioner, enqueuer },
     );
   }
 
@@ -250,7 +250,7 @@ export class Job<Key extends KrapsKey = never, Value extends JsonValue = never> 
       jobs: cappedJobs,
       partitions: next.partitions,
       partitioner: next.partitioner,
-      worker: options.worker ?? this.worker,
+      enqueuer: options.enqueuer ?? this.enqueuer,
       before: options.before ?? null,
       block,
     });

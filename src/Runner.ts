@@ -6,12 +6,9 @@ import { IncompatibleFrame, InvalidAction, JobStopped } from './errors';
 import { Frame } from './Frame';
 import { Interval } from './Interval';
 import { AnyJob, resolveJobs } from './jobResolver';
+import { KrapsJobClass } from './KrapsJob';
 import { RedisQueue } from './RedisQueue';
 import { Step } from './Step';
-
-type JobClass<Args extends unknown[] = unknown[]> = new (...args: Args) => {
-  call(): AnyJob | AnyJob[] | Promise<AnyJob | AnyJob[]>,
-};
 
 type RunnerPayload = {
   jobIndex: number,
@@ -26,19 +23,19 @@ const POLL_INTERVAL_MILLIS = 1_000;
 const PROGRESS_UPDATE_INTERVAL_MILLIS = 1_000;
 
 export class Runner<Args extends unknown[] = unknown[]> {
-  private readonly klass: JobClass<Args>;
+  private readonly klass: KrapsJobClass<Args>;
   private readonly className: string;
   private totalJobs = 0;
 
-  constructor(klass: JobClass<Args>) {
+  constructor(klass: KrapsJobClass<Args>) {
     this.klass = klass;
-    this.className = klass.name;
+    this.className = klass.jobName;
   }
 
-  async call(...args: Args): Promise<void> {
+  async run(...args: Args): Promise<void> {
     const instance = new this.klass(...args);
-    const callResult = await instance.call();
-    const jobs = resolveJobs(callResult);
+    const result = await instance.run();
+    const jobs = resolveJobs(result);
 
     this.totalJobs = jobs.length;
 
@@ -243,7 +240,7 @@ export class Runner<Args extends unknown[] = unknown[]> {
       const stopped = await redisQueue.stopped();
 
       if (!stopped) {
-        const enqueuer = krapsConfig.enqueuer;
+        const enqueuer = step.enqueuer ?? krapsConfig.enqueuer;
 
         const basePayload: RunnerPayload = {
           jobIndex,
@@ -257,7 +254,7 @@ export class Runner<Args extends unknown[] = unknown[]> {
         for (let index = 0; index < jobCount; index++) {
           if (await redisQueue.stopped()) break;
 
-          await enqueuer(step.worker, JSON.stringify(basePayload));
+          await enqueuer(JSON.stringify(basePayload));
         }
       }
 
