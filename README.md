@@ -37,7 +37,7 @@ configure({
     // hand off the job to your background queue
     await myQueue.add('KrapsWorker', { json });
   },
-  jobClasses: [SearchLogCounter],  // see "Define a job" below
+  jobs: [SearchLogCounter],  // see "Define a job" below
 });
 ```
 
@@ -49,17 +49,11 @@ eager outputs and generators (`function*` / `async function*`) for lazy
 production.
 
 ```ts
-import { Job, KrapsJob } from 'kraps';
+import { defineJob, Job } from 'kraps';
 
-class SearchLogCounter implements KrapsJob {
-  static jobName = 'SearchLogCounter';
-
-  constructor(private readonly startDate: string, private readonly endDate: string) {}
-
-  run() {
-    const startDate = this.startDate;
-    const endDate = this.endDate;
-
+const SearchLogCounter = defineJob({
+  name: 'SearchLogCounter',
+  job: (startDate: string, endDate: string) => {
     return new Job()
       .parallelize(function* () {
         for (let date = new Date(startDate); date <= new Date(endDate); date.setDate(date.getDate() + 1)) {
@@ -84,8 +78,8 @@ class SearchLogCounter implements KrapsJob {
 
         await uploadToS3(`results/${partition}.jsonl`, lines.join('\n'));
       });
-  }
-}
+  },
+});
 ```
 
 Type inference flows through the chain — `parallelize` produces a
@@ -93,17 +87,11 @@ Type inference flows through the chain — `parallelize` produces a
 sees `pairs: AsyncIterable<[string, number]>`. No `as` casts needed on the
 keys/values.
 
-**`this` and generators:** `function*` / `async function*` create their own
-`this` binding, so capture instance state in locals first (as `startDate` /
-`endDate` above) — this is a JavaScript language limitation, not a kraps one.
-
 **Pipeline registration:** the worker process rebuilds the job graph from the
-payload's `klass` name (resolved via the class's `static jobName`), so every
-class you run must appear in the `jobClasses` array passed to `configure()`.
-Each class must implement `KrapsJob` (instance `run()`) and declare a
-`static jobName` string. The static name is the identifier sent over the
-wire — using a string literal here keeps it stable across bundler
-minification and HMR, which `klass.name` is not.
+payload's `name`, so every job you run must appear in the `jobs` array passed
+to `configure()`. `defineJob` enforces both `name` and `job` at the
+definition site — the string literal `name` is the identifier sent over the
+wire, kept stable across bundler minification and HMR.
 
 ## Worker
 
@@ -133,10 +121,13 @@ async function handleKrapsJob(json: string) {
 ## Run
 
 ```ts
-import { Runner } from 'kraps';
+import { createJob } from 'kraps';
 
-await new Runner(SearchLogCounter).run('2018-01-01', '2022-01-01');
+await createJob(SearchLogCounter).run('2018-01-01', '2022-01-01');
 ```
+
+Positional `run` arguments are inferred from the `job` signature, so the
+call is type-checked end-to-end.
 
 ## Job API
 
