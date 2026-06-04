@@ -220,14 +220,6 @@ import { FakeDriver } from 'kraps';
 configure({ driver: new FakeDriver({ bucket: 'test' }), redis: new Redis({ db: 15 }) });
 ```
 
-## End-to-end example
-
-See `e2e/distributed/` for a fully distributed wordcount pipeline using
-real Redis + rustfs (S3-compatible) + multiple worker processes. Bring up the
-services with `docker compose up`, start one or more workers
-(`npx tsx e2e/distributed/worker.ts` in separate terminals), and run the
-producer (`npx tsx e2e/distributed/server.ts`).
-
 ## License
 
 MIT
