@@ -1,10 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createJob } from '../src/createJob';
 import { JobStopped } from '../src/errors';
 import { hashPartitioner, Partitioner } from '../src/hashPartitioner';
 import { Job } from '../src/Job';
-import { defineJob } from '../src/KrapsJob';
 import { RedisQueue } from '../src/RedisQueue';
+import { Runner } from '../src/Runner';
 import { Worker } from '../src/Worker';
 import { setupKraps } from './helpers/setup';
 
@@ -12,9 +11,8 @@ describe('Runner end-to-end', () => {
   it('runs parallelize → map → reduce → eachPartition end-to-end', async () => {
     const store: Record<string, number> = {};
 
-    const SearchCounter = defineJob({
-      name: 'SearchCounter',
-      job(): Job<string, number> {
+    class SearchCounter {
+      run(): Job<string, number> {
         return new Job()
           .parallelize(function* () {
             for (let index = 1; index <= 9; index++) yield `key${index}`;
@@ -28,12 +26,12 @@ describe('Runner end-to-end', () => {
           .eachPartition(async (_partition, pairs) => {
             for await (const [key, value] of pairs) store[key] = value;
           });
-      },
-    });
+      }
+    }
 
-    await setupKraps({ jobs: [SearchCounter] });
+    await setupKraps({ jobs: { SearchCounter } });
 
-    await createJob(SearchCounter).run();
+    await new Runner(SearchCounter).run();
 
     expect(store).toEqual({
       key1: 3, key2: 6, key3: 9, key4: 12, key5: 15,
@@ -41,12 +39,15 @@ describe('Runner end-to-end', () => {
     });
   });
 
-  it('passes positional arguments through to job()', async () => {
+  it('passes positional arguments through to the job class', async () => {
     const store: Record<string, number> = {};
 
-    const Counter = defineJob({
-      name: 'Counter',
-      job(multiplier: number): Job<string, number> {
+    class Counter {
+      constructor(private readonly multiplier: number) {}
+
+      run(): Job<string, number> {
+        const multiplier = this.multiplier;
+
         return new Job()
           .parallelize(function* () {
             for (let index = 1; index <= 3; index++) yield `key${index}`;
@@ -58,12 +59,12 @@ describe('Runner end-to-end', () => {
           .eachPartition(async (_partition, pairs) => {
             for await (const [key, value] of pairs) store[key] = value;
           });
-      },
-    });
+      }
+    }
 
-    await setupKraps({ jobs: [Counter] });
+    await setupKraps({ jobs: { Counter } });
 
-    await createJob(Counter).run(2);
+    await new Runner(Counter).run(2);
 
     expect(store).toEqual({ key1: 2, key2: 4, key3: 6 });
   });
@@ -73,9 +74,8 @@ describe('Runner end-to-end', () => {
 
     const partitioner: Partitioner<string> = hashPartitioner as Partitioner<string>;
 
-    const DumpLoad = defineJob({
-      name: 'DumpLoad',
-      job(): [Job<string, number>, Job<string, number>] {
+    class DumpLoad {
+      run(): [Job<string, number>, Job<string, number>] {
         const writeJob = new Job()
           .parallelize(function* () {
             for (let index = 1; index <= 9; index++) yield `key${index}`;
@@ -101,12 +101,12 @@ describe('Runner end-to-end', () => {
           });
 
         return [writeJob, readJob];
-      },
-    });
+      }
+    }
 
-    await setupKraps({ jobs: [DumpLoad] });
+    await setupKraps({ jobs: { DumpLoad } });
 
-    await createJob(DumpLoad).run();
+    await new Runner(DumpLoad).run();
 
     collected.sort((leftEntry, rightEntry) => leftEntry[0] - rightEntry[0]);
 
@@ -123,9 +123,8 @@ describe('Runner end-to-end', () => {
   it('does not affect the outcome when jobs is varied per step', async () => {
     const store: Record<string, number> = {};
 
-    const Counter = defineJob({
-      name: 'Counter',
-      job(): Job<string, number> {
+    class Counter {
+      run(): Job<string, number> {
         return new Job()
           .parallelize(function* () {
             for (let index = 1; index <= 9; index++) yield `key${index}`;
@@ -139,12 +138,12 @@ describe('Runner end-to-end', () => {
           .eachPartition(async (_partition, pairs) => {
             for await (const [key, value] of pairs) store[key] = value;
           }, { jobs: 3 });
-      },
-    });
+      }
+    }
 
-    await setupKraps({ jobs: [Counter] });
+    await setupKraps({ jobs: { Counter } });
 
-    await createJob(Counter).run();
+    await new Runner(Counter).run();
 
     expect(store).toEqual({
       key1: 3, key2: 6, key3: 9, key4: 12, key5: 15,
@@ -155,9 +154,8 @@ describe('Runner end-to-end', () => {
   it('appends two jobs and yields the union of their pairs per partition', async () => {
     const store: [string, number][] = [];
 
-    const Appender = defineJob({
-      name: 'Appender',
-      job(): Job<string, number> {
+    class Appender {
+      run(): Job<string, number> {
         const leftJob = new Job()
           .parallelize(() => [1] as number[], { partitions: 8 })
           .map(function* () {
@@ -179,12 +177,12 @@ describe('Runner end-to-end', () => {
         return leftJob.append(rightJob).eachPartition(async (_partition, pairs) => {
           for await (const pair of pairs) store.push(pair);
         });
-      },
-    });
+      }
+    }
 
-    await setupKraps({ jobs: [Appender] });
+    await setupKraps({ jobs: { Appender } });
 
-    await createJob(Appender).run();
+    await new Runner(Appender).run();
 
     const sorted = [...store].sort((leftPair, rightPair) => {
       const keyOrder = leftPair[0].localeCompare(rightPair[0]);
@@ -206,9 +204,8 @@ describe('Runner end-to-end', () => {
   it('resolves recursive combine dependencies and omits keys missing from the joined side', async () => {
     const store: Record<string, number> = {};
 
-    const Combiner = defineJob({
-      name: 'Combiner',
-      job(): Job<string, number> {
+    class Combiner {
+      run(): Job<string, number> {
         const job1 = new Job()
           .parallelize(() => [1] as number[], { partitions: 8 })
           .map(function* () {
@@ -236,12 +233,12 @@ describe('Runner end-to-end', () => {
         return job3.eachPartition(async (_partition, pairs) => {
           for await (const [key, value] of pairs) store[key] = value;
         });
-      },
-    });
+      }
+    }
 
-    await setupKraps({ jobs: [Combiner] });
+    await setupKraps({ jobs: { Combiner } });
 
-    await createJob(Combiner).run();
+    await new Runner(Combiner).run();
 
     expect(store).toEqual({ key1: 6, key2: 6, key3: 6 });
   });
@@ -251,9 +248,8 @@ describe('Runner end-to-end', () => {
     let mapCalls = 0;
     let reduceCalls = 0;
 
-    const Shared = defineJob({
-      name: 'Shared',
-      job(): [Job<string, number>, Job<string, number>] {
+    class Shared {
+      run(): [Job<string, number>, Job<string, number>] {
         const reducedJob = new Job()
           .parallelize(function* () {
             parallelizeCalls += 1;
@@ -276,12 +272,12 @@ describe('Runner end-to-end', () => {
         const job2 = reducedJob.eachPartition(async () => undefined);
 
         return [job1, job2];
-      },
-    });
+      }
+    }
 
-    await setupKraps({ jobs: [Shared] });
+    await setupKraps({ jobs: { Shared } });
 
-    await createJob(Shared).run();
+    await new Runner(Shared).run();
 
     expect(parallelizeCalls).toBe(1);
     expect(mapCalls).toBe(1);
@@ -295,21 +291,20 @@ describe('Runner end-to-end', () => {
       await worker.run({ retries: 0 });
     });
 
-    const Pipeline = defineJob({
-      name: 'Pipeline',
-      job(): Job<string, number> {
+    class Pipeline {
+      run(): Job<string, number> {
         return new Job()
           .parallelize(() => ['item1', 'item2'], { partitions: 4 })
           .map(function* (key) {
             yield [key, 1] as [string, number];
           }, { jobs: 3 })
           .reduce((_key, leftValue, rightValue) => leftValue + rightValue, { jobs: 2 });
-      },
-    });
+      }
+    }
 
-    await setupKraps({ enqueuer, jobs: [Pipeline] });
+    await setupKraps({ enqueuer, jobs: { Pipeline } });
 
-    await createJob(Pipeline).run();
+    await new Runner(Pipeline).run();
 
     const calls = enqueuer.mock.calls.map(([payload]) => JSON.parse(payload as string));
 
@@ -332,20 +327,19 @@ describe('Runner end-to-end', () => {
       await worker.run({ retries: 0 });
     });
 
-    const Capped = defineJob({
-      name: 'Capped',
-      job(): Job<string, number> {
+    class Capped {
+      run(): Job<string, number> {
         return new Job()
           .parallelize(() => ['item1', 'item2'], { partitions: 4 })
           .map(function* (key) {
             yield [key, 1] as [string, number];
           }, { jobs: 8 });
-      },
-    });
+      }
+    }
 
-    await setupKraps({ enqueuer, jobs: [Capped] });
+    await setupKraps({ enqueuer, jobs: { Capped } });
 
-    await createJob(Capped).run();
+    await new Runner(Capped).run();
 
     const mapCalls = enqueuer.mock.calls.filter(([payload]) => {
       const parsed = JSON.parse(payload as string);
@@ -368,21 +362,20 @@ describe('Runner end-to-end', () => {
     const defaultEnqueuer = trackStep(defaultStepIndices);
     const customEnqueuer = trackStep(customStepIndices);
 
-    const Routed = defineJob({
-      name: 'Routed',
-      job(): Job<string, number> {
+    class Routed {
+      run(): Job<string, number> {
         return new Job()
           .parallelize(() => ['item1', 'item2'], { partitions: 4 })
           .map(function* (key) {
             yield [key, 1] as [string, number];
           }, { enqueuer: customEnqueuer })
           .reduce((_key, left, right) => left + right);
-      },
-    });
+      }
+    }
 
-    await setupKraps({ enqueuer: defaultEnqueuer, jobs: [Routed] });
+    await setupKraps({ enqueuer: defaultEnqueuer, jobs: { Routed } });
 
-    await createJob(Routed).run();
+    await new Runner(Routed).run();
 
     // parallelize is step 0, the custom-routed map is step 1, reduce is step 2.
     expect(new Set(customStepIndices)).toEqual(new Set([1]));
@@ -392,20 +385,19 @@ describe('Runner end-to-end', () => {
   it('throws JobStopped when the redis queue is stopped before the runner finishes', async () => {
     const stoppedSpy = vi.spyOn(RedisQueue.prototype, 'stopped').mockResolvedValue(true);
 
-    const Stoppable = defineJob({
-      name: 'Stoppable',
-      job(): Job<string, null> {
+    class Stoppable {
+      run(): Job<string, null> {
         return new Job()
           .parallelize(function* () {
             for (let index = 1; index <= 9; index++) yield `key${index}`;
           }, { partitions: 8 })
           .map<string, null>(() => []);
-      },
-    });
+      }
+    }
 
-    await setupKraps({ jobs: [Stoppable] });
+    await setupKraps({ jobs: { Stoppable } });
 
-    await expect(createJob(Stoppable).run()).rejects.toThrow(JobStopped);
+    await expect(new Runner(Stoppable).run()).rejects.toThrow(JobStopped);
 
     stoppedSpy.mockRestore();
   });

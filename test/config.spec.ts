@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Redis } from 'ioredis';
-import { configure, findJob, getConfig } from '../src/config';
+import { configure, findJobClass, findJobName, getConfig } from '../src/config';
 import { FakeDriver } from '../src/drivers/FakeDriver';
-import { defineJob } from '../src/KrapsJob';
 
 function buildDriver(): FakeDriver {
   return new FakeDriver({ bucket: 'bucket' });
@@ -58,31 +57,37 @@ describe('config', () => {
   });
 
   describe('jobs', () => {
-    const Good = defineJob({
-      name: 'Good',
-      job() {
-        return null as any;
-      },
+    class Good {
+      run(): any {
+        return null;
+      }
+    }
+
+    it('stores the dict and resolves classes/names in both directions', () => {
+      configure({ driver: buildDriver(), redis: buildRedis(), jobs: { Good }, enqueuer: async () => {} });
+
+      expect(getConfig().jobs).toEqual({ Good });
+      expect(findJobClass('Good')).toBe(Good);
+      expect(findJobClass('Missing')).toBeUndefined();
+      expect(findJobName(Good)).toBe('Good');
     });
 
-    it('stores the array and finds jobs by name', () => {
-      configure({ driver: buildDriver(), redis: buildRedis(), jobs: [Good], enqueuer: async () => {} });
-
-      expect(getConfig().jobs).toEqual([Good]);
-      expect(findJob('Good')).toBe(Good);
-      expect(findJob('Missing')).toBeUndefined();
-    });
-
-    it('throws when two jobs share a name', () => {
-      const A = defineJob({ name: 'Same', job() { return null as any; } });
-      const B = defineJob({ name: 'Same', job() { return null as any; } });
-
+    it('throws when name is an empty string', () => {
       expect(() => configure({
         driver: buildDriver(),
         redis: buildRedis(),
-        jobs: [A, B],
+        jobs: { '': Good },
         enqueuer: async () => {},
-      })).toThrow(/duplicate job name "Same"/);
+      })).toThrow(/non-empty string/);
+    });
+
+    it('throws when the same class is registered under two names', () => {
+      expect(() => configure({
+        driver: buildDriver(),
+        redis: buildRedis(),
+        jobs: { Good, GoodAlias: Good },
+        enqueuer: async () => {},
+      })).toThrow(/registered under two names/);
     });
   });
 });

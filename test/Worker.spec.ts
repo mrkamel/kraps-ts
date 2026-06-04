@@ -4,7 +4,6 @@ import { Action } from '../src/actions';
 import { FakeDriver } from '../src/drivers/FakeDriver';
 import { hashPartitioner } from '../src/hashPartitioner';
 import { Job } from '../src/Job';
-import { defineJob } from '../src/KrapsJob';
 import { RedisQueue } from '../src/RedisQueue';
 import { Worker } from '../src/Worker';
 import { gunzipPairLines, gzipPairLines } from './helpers/chunks';
@@ -37,22 +36,21 @@ describe('Worker', () => {
   it('runs the before block when defined', async () => {
     let beforeCalled = false;
 
-    const BeforeJob = defineJob({
-      name: 'BeforeJob',
-      job(): Job<any, any> {
+    class BeforeJob {
+      run(): Job<any, any> {
         return new Job()
           .parallelize(() => [], { partitions: 8, before: () => { beforeCalled = true; } });
-      },
-    });
+      }
+    }
 
-    const { redis } = await setupKraps({ jobs: [BeforeJob] });
+    const { redis } = await setupKraps({ jobs: { BeforeJob } });
     const queue = buildQueue(redis);
 
     await queue.enqueue({ item: 'item1', part: '0' });
 
     await buildWorker({
       token: TOKEN,
-      name: 'BeforeJob',
+      jobName: 'BeforeJob',
       args: [],
       jobIndex: 0,
       stepIndex: 0,
@@ -63,22 +61,21 @@ describe('Worker', () => {
   });
 
   it('parallelize stores one chunk per item under the partition assigned by the partitioner', async () => {
-    const ParallelizeJob = defineJob({
-      name: 'ParallelizeJob',
-      job(): Job<any, any> {
+    class ParallelizeJob {
+      run(): Job<any, any> {
         return new Job()
           .parallelize(() => ['item1', 'item2', 'item3'], { partitions: 8 });
-      },
-    });
+      }
+    }
 
-    const { driver, redis } = await setupKraps({ jobs: [ParallelizeJob] });
+    const { driver, redis } = await setupKraps({ jobs: { ParallelizeJob } });
     const queue = buildQueue(redis);
 
     await queue.enqueue({ item: 'item1', part: '0' });
 
     await buildWorker({
       token: TOKEN,
-      name: 'ParallelizeJob',
+      jobName: 'ParallelizeJob',
       args: [],
       jobIndex: 0,
       stepIndex: 0,
@@ -93,17 +90,16 @@ describe('Worker', () => {
   });
 
   it('map reads previous-step chunks and writes mapped output partitioned by the new key', async () => {
-    const MapJob = defineJob({
-      name: 'MapJob',
-      job(): Job<any, any> {
+    class MapJob {
+      run(): Job<any, any> {
         return new Job()
           .parallelize(() => [] as string[], { partitions: 4 })
           .map((key) => [[key, 1] as [string, number]])
           .map((key, value) => [[`${key}-extra`, value + 1] as [string, number]]);
-      },
-    });
+      }
+    }
 
-    const { driver, redis } = await setupKraps({ jobs: [MapJob] });
+    const { driver, redis } = await setupKraps({ jobs: { MapJob } });
     const queue = buildQueue(redis);
 
     const chunk = gzipPairLines([['item1', 1], ['item2', 1]]);
@@ -113,7 +109,7 @@ describe('Worker', () => {
 
     await buildWorker({
       token: TOKEN,
-      name: 'MapJob',
+      jobName: 'MapJob',
       args: [],
       jobIndex: 0,
       stepIndex: 2,
@@ -135,9 +131,8 @@ describe('Worker', () => {
   });
 
   it('map pre-reduces when the subsequent step is a reduce', async () => {
-    const MapReduceJob = defineJob({
-      name: 'MapReduceJob',
-      job(): Job<any, any> {
+    class MapReduceJob {
+      run(): Job<any, any> {
         return new Job()
           .parallelize(() => [] as string[], { partitions: 4 })
           .map((key) => [
@@ -146,10 +141,10 @@ describe('Worker', () => {
             [`${key}b`, 1] as [string, number],
           ])
           .reduce((_key, leftValue, rightValue) => leftValue + rightValue);
-      },
-    });
+      }
+    }
 
-    const { driver, redis } = await setupKraps({ jobs: [MapReduceJob] });
+    const { driver, redis } = await setupKraps({ jobs: { MapReduceJob } });
     const queue = buildQueue(redis);
 
     const chunk = gzipPairLines([['item1', null], ['item2', null]]);
@@ -159,7 +154,7 @@ describe('Worker', () => {
 
     await buildWorker({
       token: TOKEN,
-      name: 'MapReduceJob',
+      jobName: 'MapReduceJob',
       args: [],
       jobIndex: 0,
       stepIndex: 1,
@@ -181,9 +176,8 @@ describe('Worker', () => {
   it('mapPartitions hands the partition and a sorted-merged iterable to the user block', async () => {
     const captured: [number, [unknown, unknown][]][] = [];
 
-    const MapPartitionsJob = defineJob({
-      name: 'MapPartitionsJob',
-      job(): Job<any, any> {
+    class MapPartitionsJob {
+      run(): Job<any, any> {
         return new Job()
           .parallelize(() => [] as string[], { partitions: 4 })
           .map((key) => [[key, 1] as [string, number]])
@@ -196,10 +190,10 @@ describe('Worker', () => {
 
             for (const [key, value] of list) yield [`${key}x`, value + 1] as [string, number];
           });
-      },
-    });
+      }
+    }
 
-    const { driver, redis } = await setupKraps({ jobs: [MapPartitionsJob] });
+    const { driver, redis } = await setupKraps({ jobs: { MapPartitionsJob } });
     const queue = buildQueue(redis);
 
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, gzipPairLines([['item1', 1], ['item3', 1]]));
@@ -209,7 +203,7 @@ describe('Worker', () => {
 
     await buildWorker({
       token: TOKEN,
-      name: 'MapPartitionsJob',
+      jobName: 'MapPartitionsJob',
       args: [],
       jobIndex: 0,
       stepIndex: 2,
@@ -232,17 +226,16 @@ describe('Worker', () => {
   });
 
   it('reduce merges the chunks for one partition and stores the reduced result', async () => {
-    const ReduceJob = defineJob({
-      name: 'ReduceJob',
-      job(): Job<any, any> {
+    class ReduceJob {
+      run(): Job<any, any> {
         return new Job()
           .parallelize(() => [] as string[], { partitions: 4 })
           .map<string, number>(() => [])
           .reduce((_key, leftValue, rightValue) => leftValue + rightValue);
-      },
-    });
+      }
+    }
 
-    const { driver, redis } = await setupKraps({ jobs: [ReduceJob] });
+    const { driver, redis } = await setupKraps({ jobs: { ReduceJob } });
     const queue = buildQueue(redis);
 
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, gzipPairLines([
@@ -262,7 +255,7 @@ describe('Worker', () => {
 
     await buildWorker({
       token: TOKEN,
-      name: 'ReduceJob',
+      jobName: 'ReduceJob',
       args: [],
       jobIndex: 0,
       stepIndex: 2,
@@ -282,9 +275,8 @@ describe('Worker', () => {
   it('eachPartition feeds the user block with sorted, merged pairs', async () => {
     const captured: [number, [unknown, unknown][]][] = [];
 
-    const EachPartitionJob = defineJob({
-      name: 'EachPartitionJob',
-      job(): Job<any, any> {
+    class EachPartitionJob {
+      run(): Job<any, any> {
         return new Job()
           .parallelize(() => [] as string[], { partitions: 4 })
           .eachPartition(async (partition, pairs) => {
@@ -294,10 +286,10 @@ describe('Worker', () => {
 
             captured.push([partition, list]);
           });
-      },
-    });
+      }
+    }
 
-    const { driver, redis } = await setupKraps({ jobs: [EachPartitionJob] });
+    const { driver, redis } = await setupKraps({ jobs: { EachPartitionJob } });
     const queue = buildQueue(redis);
 
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, gzipPairLines([['item1', 1], ['item2', 3]]));
@@ -307,7 +299,7 @@ describe('Worker', () => {
 
     await buildWorker({
       token: TOKEN,
-      name: 'EachPartitionJob',
+      jobName: 'EachPartitionJob',
       args: [],
       jobIndex: 0,
       stepIndex: 1,
@@ -320,9 +312,8 @@ describe('Worker', () => {
   });
 
   it('append merges the chunks of two frames into one mapper output', async () => {
-    const AppendJob = defineJob({
-      name: 'AppendJob',
-      job(): Job<any, any>[] {
+    class AppendJob {
+      run(): Job<any, any>[] {
         const leftJob = new Job()
           .parallelize(() => [] as string[], { partitions: 2 })
           .map<string, number>(() => []);
@@ -332,10 +323,10 @@ describe('Worker', () => {
           .map<string, number>(() => []);
 
         return [leftJob, rightJob, rightJob.append(leftJob)];
-      },
-    });
+      }
+    }
 
-    const { driver, redis } = await setupKraps({ jobs: [AppendJob] });
+    const { driver, redis } = await setupKraps({ jobs: { AppendJob } });
     const queue = buildQueue(redis);
 
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, gzipPairLines([['key1', 1], ['key2', 2]]));
@@ -345,7 +336,7 @@ describe('Worker', () => {
 
     await buildWorker({
       token: TOKEN,
-      name: 'AppendJob',
+      jobName: 'AppendJob',
       args: [],
       jobIndex: 2,
       stepIndex: 2,
@@ -364,9 +355,8 @@ describe('Worker', () => {
   });
 
   it('combine joins matching keys and omits keys missing on the joined side', async () => {
-    const CombineJob = defineJob({
-      name: 'CombineJob',
-      job(): Job<any, any>[] {
+    class CombineJob {
+      run(): Job<any, any>[] {
         const otherJob = new Job()
           .parallelize(() => [] as string[], { partitions: 2 })
           .map<string, number>(() => [])
@@ -380,10 +370,10 @@ describe('Worker', () => {
           );
 
         return [otherJob, job];
-      },
-    });
+      }
+    }
 
-    const { driver, redis } = await setupKraps({ jobs: [CombineJob] });
+    const { driver, redis } = await setupKraps({ jobs: { CombineJob } });
     const queue = buildQueue(redis);
 
     await driver.store(`prefix/${PREVIOUS_TOKEN}/0/chunk.0.json`, gzipPairLines([
@@ -400,7 +390,7 @@ describe('Worker', () => {
 
     await buildWorker({
       token: TOKEN,
-      name: 'CombineJob',
+      jobName: 'CombineJob',
       args: [],
       jobIndex: 1,
       stepIndex: 2,
@@ -421,15 +411,14 @@ describe('Worker', () => {
   it('does not run when the redis queue is already stopped', async () => {
     let beforeCalled = false;
 
-    const StoppedJob = defineJob({
-      name: 'StoppedJob',
-      job(): Job<any, any> {
+    class StoppedJob {
+      run(): Job<any, any> {
         return new Job()
           .parallelize(() => [], { partitions: 4, before: () => { beforeCalled = true; } });
-      },
-    });
+      }
+    }
 
-    const { redis } = await setupKraps({ jobs: [StoppedJob] });
+    const { redis } = await setupKraps({ jobs: { StoppedJob } });
     const queue = buildQueue(redis);
 
     await queue.enqueue({ item: 'item1', part: '0' });
@@ -437,7 +426,7 @@ describe('Worker', () => {
 
     await buildWorker({
       token: TOKEN,
-      name: 'StoppedJob',
+      jobName: 'StoppedJob',
       args: [],
       jobIndex: 0,
       stepIndex: 0,
@@ -448,18 +437,17 @@ describe('Worker', () => {
   });
 
   it('rejects an unknown action', async () => {
-    const BadJob = defineJob({
-      name: 'BadJob',
-      job(): Job<any, any> {
+    class BadJob {
+      run(): Job<any, any> {
         const job = new Job().parallelize(() => [], { partitions: 4 });
 
         job.steps[0].action = 'totally_unknown' as Action;
 
         return job;
-      },
-    });
+      }
+    }
 
-    const { redis } = await setupKraps({ jobs: [BadJob] });
+    const { redis } = await setupKraps({ jobs: { BadJob } });
     const queue = buildQueue(redis);
 
     await queue.enqueue({ item: 'x', part: '0' });
@@ -467,7 +455,7 @@ describe('Worker', () => {
     await expect(
       buildWorker({
         token: TOKEN,
-        name: 'BadJob',
+        jobName: 'BadJob',
         args: [],
         jobIndex: 0,
         stepIndex: 0,

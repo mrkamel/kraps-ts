@@ -1,9 +1,9 @@
 import { Redis } from 'ioredis';
 import type { Driver } from './drivers/Driver';
-import type { KrapsJob } from './KrapsJob';
+import type { KrapsJobClass } from './KrapsJob';
 
 export type Enqueuer = (json: string) => void | Promise<void>;
-export type JobRegistry = KrapsJob[];
+export type JobClasses = Record<string, KrapsJobClass>;
 
 export type KrapsConfig = {
   driver: Driver,
@@ -12,8 +12,8 @@ export type KrapsConfig = {
   jobTtl: number,
   showProgress: boolean,
   enqueuer: Enqueuer,
-  jobs: JobRegistry,
-  jobByName: Map<string, KrapsJob>,
+  jobs: JobClasses,
+  nameByClass: Map<KrapsJobClass, string>,
 };
 
 export type ConfigureOptions = {
@@ -23,7 +23,7 @@ export type ConfigureOptions = {
   jobTtl?: number,
   showProgress?: boolean,
   enqueuer: Enqueuer,
-  jobs?: JobRegistry,
+  jobs?: JobClasses,
 };
 
 const FOUR_DAYS_SECONDS = 4 * 24 * 60 * 60;
@@ -31,8 +31,8 @@ const FOUR_DAYS_SECONDS = 4 * 24 * 60 * 60;
 let config: KrapsConfig | null = null;
 
 export function configure(options: ConfigureOptions): void {
-  const jobs = options.jobs ?? [];
-  const jobByName = buildJobIndex(jobs);
+  const jobs = options.jobs ?? {};
+  const nameByClass = buildNameByClass(jobs);
 
   config = {
     driver: options.driver,
@@ -42,7 +42,7 @@ export function configure(options: ConfigureOptions): void {
     showProgress: options.showProgress ?? true,
     enqueuer: options.enqueuer,
     jobs,
-    jobByName,
+    nameByClass,
   };
 }
 
@@ -52,20 +52,29 @@ export function getConfig(): KrapsConfig {
   return config;
 }
 
-export function findJob(name: string): KrapsJob | undefined {
-  return getConfig().jobByName.get(name);
+export function findJobClass(name: string): KrapsJobClass | undefined {
+  return getConfig().jobs[name];
 }
 
-function buildJobIndex(jobs: JobRegistry): Map<string, KrapsJob> {
-  const index = new Map<string, KrapsJob>();
+export function findJobName(klass: KrapsJobClass): string | undefined {
+  return getConfig().nameByClass.get(klass);
+}
 
-  for (const job of jobs) {
-    if (index.has(job.name)) {
-      throw new Error(`Kraps: duplicate job name "${job.name}" in jobs`);
+function buildNameByClass(jobs: JobClasses): Map<KrapsJobClass, string> {
+  const nameByClass = new Map<KrapsJobClass, string>();
+
+  for (const [name, klass] of Object.entries(jobs)) {
+    if (name.length === 0) {
+      throw new Error('Kraps: job name must be a non-empty string');
     }
 
-    index.set(job.name, job);
+    const existing = nameByClass.get(klass);
+    if (existing) {
+      throw new Error(`Kraps: job class registered under two names: "${existing}" and "${name}"`);
+    }
+
+    nameByClass.set(klass, name);
   }
 
-  return index;
+  return nameByClass;
 }

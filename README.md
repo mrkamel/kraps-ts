@@ -37,7 +37,7 @@ configure({
     // hand off the job to your background queue
     await myQueue.add('KrapsWorker', { json });
   },
-  jobs: [SearchLogCounter],  // see "Define a job" below
+  jobs: { SearchLogCounter },  // see "Define a job" below
 });
 ```
 
@@ -49,11 +49,15 @@ eager outputs and generators (`function*` / `async function*`) for lazy
 production.
 
 ```ts
-import { defineJob, Job } from 'kraps';
+import { Job } from 'kraps';
 
-const SearchLogCounter = defineJob({
-  name: 'SearchLogCounter',
-  job: (startDate: string, endDate: string) => {
+class SearchLogCounter {
+  constructor(private readonly startDate: string, private readonly endDate: string) {}
+
+  run() {
+    const startDate = this.startDate;
+    const endDate = this.endDate;
+
     return new Job()
       .parallelize(function* () {
         for (let date = new Date(startDate); date <= new Date(endDate); date.setDate(date.getDate() + 1)) {
@@ -78,8 +82,8 @@ const SearchLogCounter = defineJob({
 
         await uploadToS3(`results/${partition}.jsonl`, lines.join('\n'));
       });
-  },
-});
+  }
+}
 ```
 
 Type inference flows through the chain — `parallelize` produces a
@@ -87,11 +91,19 @@ Type inference flows through the chain — `parallelize` produces a
 sees `pairs: AsyncIterable<[string, number]>`. No `as` casts needed on the
 keys/values.
 
+**`this` and generators:** `function*` / `async function*` create their own
+`this` binding, so capture instance state in locals first (as `startDate` /
+`endDate` above) — this is a JavaScript language limitation, not a kraps one.
+
 **Pipeline registration:** the worker process rebuilds the job graph from the
-payload's `name`, so every job you run must appear in the `jobs` array passed
-to `configure()`. `defineJob` enforces both `name` and `job` at the
-definition site — the string literal `name` is the identifier sent over the
-wire, kept stable across bundler minification and HMR.
+payload's name, so every class you run must appear in the `jobs` dict passed
+to `configure()`. The dict key is the identifier sent over the wire —
+`jobs: { SearchLogCounter }` uses shorthand to bind the key `'SearchLogCounter'`
+to the class. The key is a string literal in source code, so it survives
+bundler minification. (Note: the Runner resolves a class back to its name via
+an identity map built at `configure()` time. If HMR swaps a class for a fresh
+identity, re-run `configure()` so the map sees the new constructor.) The
+class only needs an instance `run()` method.
 
 ## Worker
 
@@ -121,13 +133,10 @@ async function handleKrapsJob(json: string) {
 ## Run
 
 ```ts
-import { createJob } from 'kraps';
+import { Runner } from 'kraps';
 
-await createJob(SearchLogCounter).run('2018-01-01', '2022-01-01');
+await new Runner(SearchLogCounter).run('2018-01-01', '2022-01-01');
 ```
-
-Positional `run` arguments are inferred from the `job` signature, so the
-call is type-checked end-to-end.
 
 ## Job API
 
