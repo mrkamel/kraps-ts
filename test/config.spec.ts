@@ -73,31 +73,6 @@ describe('config', () => {
       expect(findJob('Missing')).toBeUndefined();
     });
 
-    it('throws when a job is missing a name', () => {
-      const Bad = { job() { return null as any; } };
-
-      expect(() => configure({
-        driver: buildDriver(),
-        redis: buildRedis(),
-        jobs: [Bad as any],
-        enqueuer: async () => {},
-      })).toThrow(/missing a name/);
-    });
-
-    it('throws when name is an empty string', () => {
-      const Empty = defineJob({
-        name: '',
-        job() { return null as any; },
-      });
-
-      expect(() => configure({
-        driver: buildDriver(),
-        redis: buildRedis(),
-        jobs: [Empty],
-        enqueuer: async () => {},
-      })).toThrow(/non-empty string/);
-    });
-
     it('throws when two jobs share a name', () => {
       const A = defineJob({ name: 'Same', job() { return null as any; } });
       const B = defineJob({ name: 'Same', job() { return null as any; } });

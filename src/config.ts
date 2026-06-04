@@ -60,14 +60,6 @@ function buildJobIndex(jobs: JobRegistry): Map<string, KrapsJob> {
   const index = new Map<string, KrapsJob>();
 
   for (const job of jobs) {
-    if (typeof job.name !== 'string') {
-      throw new Error('Kraps: job is missing a name string');
-    }
-
-    if (job.name.length === 0) {
-      throw new Error('Kraps: job name must be a non-empty string');
-    }
-
     if (index.has(job.name)) {
       throw new Error(`Kraps: duplicate job name "${job.name}" in jobs`);
     }

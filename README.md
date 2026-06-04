@@ -89,7 +89,7 @@ keys/values.
 
 **Pipeline registration:** the worker process rebuilds the job graph from the
 payload's `name`, so every job you run must appear in the `jobs` array passed
-to `configure()`. `defineJob` enforces both `name` and `create` at the
+to `configure()`. `defineJob` enforces both `name` and `job` at the
 definition site — the string literal `name` is the identifier sent over the
 wire, kept stable across bundler minification and HMR.
 
@@ -126,7 +126,7 @@ import { createJob } from 'kraps';
 await createJob(SearchLogCounter).run('2018-01-01', '2022-01-01');
 ```
 
-Positional `run` arguments are inferred from the `create` signature, so the
+Positional `run` arguments are inferred from the `job` signature, so the
 call is type-checked end-to-end.
 
 ## Job API
