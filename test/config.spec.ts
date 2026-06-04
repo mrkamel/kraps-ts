@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { Redis } from 'ioredis';
-import { configure, findJobClass, getConfig } from '../src/config';
+import { configure, findJobClass, findJobName, getConfig } from '../src/config';
 import { FakeDriver } from '../src/drivers/FakeDriver';
-import { KrapsJob } from '../src/KrapsJob';
 
 function buildDriver(): FakeDriver {
   return new FakeDriver({ bucket: 'bucket' });
@@ -57,78 +56,38 @@ describe('config', () => {
     expect(config.showProgress).toBe(true);
   });
 
-  describe('jobClasses', () => {
-    class Good implements KrapsJob {
-      static jobName = 'Good';
-
+  describe('jobs', () => {
+    class Good {
       run(): any {
         return null;
       }
     }
 
-    it('stores the array and finds classes by jobName', () => {
-      configure({ driver: buildDriver(), redis: buildRedis(), jobClasses: [Good], enqueuer: async () => {} });
+    it('stores the dict and resolves classes/names in both directions', () => {
+      configure({ driver: buildDriver(), redis: buildRedis(), jobs: { Good }, enqueuer: async () => {} });
 
-      expect(getConfig().jobClasses).toEqual([Good]);
+      expect(getConfig().jobs).toEqual({ Good });
       expect(findJobClass('Good')).toBe(Good);
       expect(findJobClass('Missing')).toBeUndefined();
+      expect(findJobName(Good)).toBe('Good');
     });
 
-    it('throws when a class is missing static jobName', () => {
-      class Bad {
-        run(): any {
-          return null;
-        }
-      }
-
+    it('throws when name is an empty string', () => {
       expect(() => configure({
         driver: buildDriver(),
         redis: buildRedis(),
-        jobClasses: [Bad as any],
-        enqueuer: async () => {},
-      })).toThrow(/missing a static jobName/);
-    });
-
-    it('throws when jobName is an empty string', () => {
-      class Empty {
-        static jobName = '';
-
-        run(): any {
-          return null;
-        }
-      }
-
-      expect(() => configure({
-        driver: buildDriver(),
-        redis: buildRedis(),
-        jobClasses: [Empty],
+        jobs: { '': Good },
         enqueuer: async () => {},
       })).toThrow(/non-empty string/);
     });
 
-    it('throws when two classes share a jobName', () => {
-      class A {
-        static jobName = 'Same';
-
-        run(): any {
-          return null;
-        }
-      }
-
-      class B {
-        static jobName = 'Same';
-
-        run(): any {
-          return null;
-        }
-      }
-
+    it('throws when the same class is registered under two names', () => {
       expect(() => configure({
         driver: buildDriver(),
         redis: buildRedis(),
-        jobClasses: [A, B],
+        jobs: { Good, GoodAlias: Good },
         enqueuer: async () => {},
-      })).toThrow(/duplicate jobName "Same"/);
+      })).toThrow(/registered under two names/);
     });
   });
 });

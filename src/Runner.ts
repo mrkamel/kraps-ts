@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto';
 import { SingleBar, Presets } from 'cli-progress';
 import { Actions } from './actions';
-import { getConfig } from './config';
+import { findJobName, getConfig } from './config';
 import { IncompatibleFrame, InvalidAction, JobStopped } from './errors';
 import { Frame } from './Frame';
 import { Interval } from './Interval';
@@ -15,7 +15,7 @@ type RunnerPayload = {
   stepIndex: number,
   frame: Frame | Record<string, never>,
   token: string,
-  klass: string,
+  jobName: string,
   args: unknown[],
 };
 
@@ -24,15 +24,19 @@ const PROGRESS_UPDATE_INTERVAL_MILLIS = 1_000;
 
 export class Runner<Args extends unknown[] = unknown[]> {
   private readonly klass: KrapsJobClass<Args>;
-  private readonly className: string;
+  private jobName = '';
   private totalJobs = 0;
 
   constructor(klass: KrapsJobClass<Args>) {
     this.klass = klass;
-    this.className = klass.jobName;
   }
 
   async run(...args: Args): Promise<void> {
+    const jobName = findJobName(this.klass);
+    if (!jobName) throw new Error('Kraps: job class is not registered — add it to configure({ jobs })');
+
+    this.jobName = jobName;
+
     const instance = new this.klass(...args);
     const result = await instance.run();
     const jobs = resolveJobs(result);
@@ -247,7 +251,7 @@ export class Runner<Args extends unknown[] = unknown[]> {
           stepIndex,
           frame: frame ?? {},
           token,
-          klass: this.className,
+          jobName: this.jobName,
           args,
         };
 
@@ -302,7 +306,7 @@ export class Runner<Args extends unknown[] = unknown[]> {
     const jobsLabel = step.jobs ?? '?';
 
     const format =
-      `${this.className}: job ${jobIndex + 1}/${this.totalJobs}, step ${stepIndex + 1}/${totalSteps}, ` +
+      `${this.jobName}: job ${jobIndex + 1}/${this.totalJobs}, step ${stepIndex + 1}/${totalSteps}, ` +
       `${jobsLabel} jobs, token ${token}, {duration_formatted}, {value}/{total} ({percentage}%) => ${step.action}`;
 
     const progressBar = new SingleBar({ format, hideCursor: true }, Presets.shades_classic);

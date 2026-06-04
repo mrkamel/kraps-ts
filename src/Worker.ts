@@ -19,7 +19,7 @@ import { TempPaths } from './TempPaths';
 import { tryCatch } from './tryCatch';
 
 type WorkerArgs = {
-  klass: string,
+  jobName: string,
   args: unknown[],
   jobIndex: number,
   stepIndex: number,
@@ -374,8 +374,8 @@ export class Worker {
   private async resolveJobsFromRegistry(): Promise<void> {
     if (this.jobsCache) return;
 
-    const JobClass = findJobClass(this.args.klass);
-    if (!JobClass) throw new InvalidJob(`Unknown job class ${this.args.klass}; did you register it?`);
+    const JobClass = findJobClass(this.args.jobName);
+    if (!JobClass) throw new InvalidJob(`Unknown job ${this.args.jobName}; did you register it?`);
 
     const instance = new JobClass(...this.args.args);
     const result = await instance.run();

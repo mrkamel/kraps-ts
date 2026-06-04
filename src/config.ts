@@ -3,7 +3,7 @@ import type { Driver } from './drivers/Driver';
 import type { KrapsJobClass } from './KrapsJob';
 
 export type Enqueuer = (json: string) => void | Promise<void>;
-export type JobClassRegistry = KrapsJobClass[];
+export type JobClasses = Record<string, KrapsJobClass>;
 
 export type KrapsConfig = {
   driver: Driver,
@@ -12,8 +12,8 @@ export type KrapsConfig = {
   jobTtl: number,
   showProgress: boolean,
   enqueuer: Enqueuer,
-  jobClasses: JobClassRegistry,
-  jobClassByName: Map<string, KrapsJobClass>,
+  jobs: JobClasses,
+  nameByClass: Map<KrapsJobClass, string>,
 };
 
 export type ConfigureOptions = {
@@ -23,7 +23,7 @@ export type ConfigureOptions = {
   jobTtl?: number,
   showProgress?: boolean,
   enqueuer: Enqueuer,
-  jobClasses?: JobClassRegistry,
+  jobs?: JobClasses,
 };
 
 const FOUR_DAYS_SECONDS = 4 * 24 * 60 * 60;
@@ -31,8 +31,8 @@ const FOUR_DAYS_SECONDS = 4 * 24 * 60 * 60;
 let config: KrapsConfig | null = null;
 
 export function configure(options: ConfigureOptions): void {
-  const jobClasses = options.jobClasses ?? [];
-  const jobClassByName = buildJobClassIndex(jobClasses);
+  const jobs = options.jobs ?? {};
+  const nameByClass = buildNameByClass(jobs);
 
   config = {
     driver: options.driver,
@@ -41,8 +41,8 @@ export function configure(options: ConfigureOptions): void {
     jobTtl: options.jobTtl ?? FOUR_DAYS_SECONDS,
     showProgress: options.showProgress ?? true,
     enqueuer: options.enqueuer,
-    jobClasses,
-    jobClassByName,
+    jobs,
+    nameByClass,
   };
 }
 
@@ -53,27 +53,28 @@ export function getConfig(): KrapsConfig {
 }
 
 export function findJobClass(name: string): KrapsJobClass | undefined {
-  return getConfig().jobClassByName.get(name);
+  return getConfig().jobs[name];
 }
 
-function buildJobClassIndex(jobClasses: JobClassRegistry): Map<string, KrapsJobClass> {
-  const index = new Map<string, KrapsJobClass>();
+export function findJobName(klass: KrapsJobClass): string | undefined {
+  return getConfig().nameByClass.get(klass);
+}
 
-  for (const klass of jobClasses) {
-    if (typeof klass.jobName !== 'string') {
-      throw new Error(`Kraps: job class ${klass.name || '<anonymous>'} is missing a static jobName string`);
+function buildNameByClass(jobs: JobClasses): Map<KrapsJobClass, string> {
+  const nameByClass = new Map<KrapsJobClass, string>();
+
+  for (const [name, klass] of Object.entries(jobs)) {
+    if (name.length === 0) {
+      throw new Error('Kraps: job name must be a non-empty string');
     }
 
-    if (klass.jobName.length === 0) {
-      throw new Error(`Kraps: job class ${klass.name || '<anonymous>'}.jobName must be a non-empty string`);
+    const existing = nameByClass.get(klass);
+    if (existing) {
+      throw new Error(`Kraps: job class registered under two names: "${existing}" and "${name}"`);
     }
 
-    if (index.has(klass.jobName)) {
-      throw new Error(`Kraps: duplicate jobName "${klass.jobName}" in jobClasses`);
-    }
-
-    index.set(klass.jobName, klass);
+    nameByClass.set(klass, name);
   }
 
-  return index;
+  return nameByClass;
 }

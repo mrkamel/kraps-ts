@@ -37,7 +37,7 @@ configure({
     // hand off the job to your background queue
     await myQueue.add('KrapsWorker', { json });
   },
-  jobClasses: [SearchLogCounter],  // see "Define a job" below
+  jobs: { SearchLogCounter },  // see "Define a job" below
 });
 ```
 
@@ -49,11 +49,9 @@ eager outputs and generators (`function*` / `async function*`) for lazy
 production.
 
 ```ts
-import { Job, KrapsJob } from 'kraps';
+import { Job } from 'kraps';
 
-class SearchLogCounter implements KrapsJob {
-  static jobName = 'SearchLogCounter';
-
+class SearchLogCounter {
   constructor(private readonly startDate: string, private readonly endDate: string) {}
 
   run() {
@@ -98,12 +96,14 @@ keys/values.
 `endDate` above) — this is a JavaScript language limitation, not a kraps one.
 
 **Pipeline registration:** the worker process rebuilds the job graph from the
-payload's `klass` name (resolved via the class's `static jobName`), so every
-class you run must appear in the `jobClasses` array passed to `configure()`.
-Each class must implement `KrapsJob` (instance `run()`) and declare a
-`static jobName` string. The static name is the identifier sent over the
-wire — using a string literal here keeps it stable across bundler
-minification and HMR, which `klass.name` is not.
+payload's name, so every class you run must appear in the `jobs` dict passed
+to `configure()`. The dict key is the identifier sent over the wire —
+`jobs: { SearchLogCounter }` uses shorthand to bind the key `'SearchLogCounter'`
+to the class. The key is a string literal in source code, so it survives
+bundler minification. (Note: the Runner resolves a class back to its name via
+an identity map built at `configure()` time. If HMR swaps a class for a fresh
+identity, re-run `configure()` so the map sees the new constructor.) The
+class only needs an instance `run()` method.
 
 ## Worker
 
