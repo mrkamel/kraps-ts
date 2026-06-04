@@ -5,7 +5,7 @@ export {
   type KrapsConfig,
   type ConfigureOptions,
   type Enqueuer,
-  type JobRegistry,
+  type JobClassRegistry,
 } from './src/config';
 export {
   KrapsError,
@@ -17,8 +17,7 @@ export {
   InvalidChunkLimit,
 } from './src/errors';
 export { hashPartitioner, type Partitioner } from './src/hashPartitioner';
-export { type KrapsJob, defineJob } from './src/KrapsJob';
-export { createJob, type JobInvocation } from './src/createJob';
+export { type KrapsJob, type KrapsJobClass } from './src/KrapsJob';
 export { type Driver, type StoreInput, type StoreOptions } from './src/drivers/Driver';
 export { FakeDriver } from './src/drivers/FakeDriver';
 export { S3Driver } from './src/drivers/S3Driver';
@@ -35,6 +34,7 @@ export {
   type EachPartitionBlock,
 } from './src/Job';
 export { resolveJobs } from './src/jobResolver';
+export { Runner } from './src/Runner';
 export { Worker } from './src/Worker';
 export { RedisQueue } from './src/RedisQueue';
 export { TempPath } from './src/TempPath';

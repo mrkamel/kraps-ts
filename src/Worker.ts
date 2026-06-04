@@ -1,6 +1,6 @@
 import { createReadStream } from 'fs';
 import { Actions } from './actions';
-import { findJob, getConfig } from './config';
+import { findJobClass, getConfig } from './config';
 import { downloadAll } from './downloader';
 import { InvalidAction, InvalidJob, InvalidStep, KrapsError } from './errors';
 import { Frame } from './Frame';
@@ -19,7 +19,7 @@ import { TempPaths } from './TempPaths';
 import { tryCatch } from './tryCatch';
 
 type WorkerArgs = {
-  name: string,
+  klass: string,
   args: unknown[],
   jobIndex: number,
   stepIndex: number,
@@ -374,10 +374,11 @@ export class Worker {
   private async resolveJobsFromRegistry(): Promise<void> {
     if (this.jobsCache) return;
 
-    const declaration = findJob(this.args.name);
-    if (!declaration) throw new InvalidJob(`Unknown job ${this.args.name}; did you register it?`);
+    const JobClass = findJobClass(this.args.klass);
+    if (!JobClass) throw new InvalidJob(`Unknown job class ${this.args.klass}; did you register it?`);
 
-    const result = await declaration.job(...this.args.args);
+    const instance = new JobClass(...this.args.args);
+    const result = await instance.run();
 
     this.jobsCache = resolveJobs(result as AnyJob | AnyJob[]);
   }

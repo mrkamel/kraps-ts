@@ -6,7 +6,7 @@ import { IncompatibleFrame, InvalidAction, JobStopped } from './errors';
 import { Frame } from './Frame';
 import { Interval } from './Interval';
 import { AnyJob, resolveJobs } from './jobResolver';
-import { KrapsJob } from './KrapsJob';
+import { KrapsJobClass } from './KrapsJob';
 import { RedisQueue } from './RedisQueue';
 import { Step } from './Step';
 
@@ -15,7 +15,7 @@ type RunnerPayload = {
   stepIndex: number,
   frame: Frame | Record<string, never>,
   token: string,
-  name: string,
+  klass: string,
   args: unknown[],
 };
 
@@ -23,15 +23,18 @@ const POLL_INTERVAL_MILLIS = 1_000;
 const PROGRESS_UPDATE_INTERVAL_MILLIS = 1_000;
 
 export class Runner<Args extends unknown[] = unknown[]> {
-  private readonly declaration: KrapsJob<Args>;
+  private readonly klass: KrapsJobClass<Args>;
+  private readonly className: string;
   private totalJobs = 0;
 
-  constructor(declaration: KrapsJob<Args>) {
-    this.declaration = declaration;
+  constructor(klass: KrapsJobClass<Args>) {
+    this.klass = klass;
+    this.className = klass.jobName;
   }
 
   async run(...args: Args): Promise<void> {
-    const result = await this.declaration.job(...args);
+    const instance = new this.klass(...args);
+    const result = await instance.run();
     const jobs = resolveJobs(result);
 
     this.totalJobs = jobs.length;
@@ -244,7 +247,7 @@ export class Runner<Args extends unknown[] = unknown[]> {
           stepIndex,
           frame: frame ?? {},
           token,
-          name: this.declaration.name,
+          klass: this.className,
           args,
         };
 
@@ -299,7 +302,7 @@ export class Runner<Args extends unknown[] = unknown[]> {
     const jobsLabel = step.jobs ?? '?';
 
     const format =
-      `${this.declaration.name}: job ${jobIndex + 1}/${this.totalJobs}, step ${stepIndex + 1}/${totalSteps}, ` +
+      `${this.className}: job ${jobIndex + 1}/${this.totalJobs}, step ${stepIndex + 1}/${totalSteps}, ` +
       `${jobsLabel} jobs, token ${token}, {duration_formatted}, {value}/{total} ({percentage}%) => ${step.action}`;
 
     const progressBar = new SingleBar({ format, hideCursor: true }, Presets.shades_classic);
