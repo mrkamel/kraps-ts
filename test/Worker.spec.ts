@@ -436,17 +436,18 @@ describe('Worker', () => {
     expect(beforeCalled).toBe(false);
   });
 
-  it('stop() exits the run loop and resolves after run completes', async () => {
+  it('aborts the run loop when the signal is aborted mid-run', async () => {
+    const controller = new AbortController();
     const seen: string[] = [];
 
-    class StopJob {
+    class AbortJob {
       run(): Job<any, any> {
         return new Job()
-          .parallelize(() => [], { partitions: 4, before: () => { seen.push('before'); } });
+          .parallelize(() => [], { partitions: 4, before: () => { seen.push('before'); controller.abort(); } });
       }
     }
 
-    const { redis } = await setupKraps({ jobs: { StopJob } });
+    const { redis } = await setupKraps({ jobs: { AbortJob } });
     const queue = buildQueue(redis);
 
     await queue.enqueue({ item: 'a', part: '0' });
@@ -454,47 +455,47 @@ describe('Worker', () => {
 
     const worker = buildWorker({
       token: TOKEN,
-      jobName: 'StopJob',
+      jobName: 'AbortJob',
       args: [],
       jobIndex: 0,
       stepIndex: 0,
       frame: {},
     });
 
-    const runPromise = worker.run({ retries: 0 });
-    await worker.stop();
-    await runPromise;
+    await expect(worker.run({ retries: 0, signal: controller.signal })).rejects.toThrow();
 
     expect(seen.length).toBeLessThan(2);
     expect(await queue.stopped()).toBe(false);
   });
 
-  it('stop() before run() prevents the loop from starting', async () => {
+  it('throws immediately when the signal is already aborted', async () => {
     let beforeCalled = false;
 
-    class StopBeforeRunJob {
+    class AbortBeforeRunJob {
       run(): Job<any, any> {
         return new Job()
           .parallelize(() => [], { partitions: 4, before: () => { beforeCalled = true; } });
       }
     }
 
-    const { redis } = await setupKraps({ jobs: { StopBeforeRunJob } });
+    const { redis } = await setupKraps({ jobs: { AbortBeforeRunJob } });
     const queue = buildQueue(redis);
 
     await queue.enqueue({ item: 'a', part: '0' });
 
     const worker = buildWorker({
       token: TOKEN,
-      jobName: 'StopBeforeRunJob',
+      jobName: 'AbortBeforeRunJob',
       args: [],
       jobIndex: 0,
       stepIndex: 0,
       frame: {},
     });
 
-    await worker.stop();
-    await worker.run({ retries: 0 });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(worker.run({ retries: 0, signal: controller.signal })).rejects.toThrow();
 
     expect(beforeCalled).toBe(false);
   });
