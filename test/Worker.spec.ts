@@ -436,6 +436,69 @@ describe('Worker', () => {
     expect(beforeCalled).toBe(false);
   });
 
+  it('stop() exits the run loop and resolves after run completes', async () => {
+    const seen: string[] = [];
+
+    class StopJob {
+      run(): Job<any, any> {
+        return new Job()
+          .parallelize(() => [], { partitions: 4, before: () => { seen.push('before'); } });
+      }
+    }
+
+    const { redis } = await setupKraps({ jobs: { StopJob } });
+    const queue = buildQueue(redis);
+
+    await queue.enqueue({ item: 'a', part: '0' });
+    await queue.enqueue({ item: 'b', part: '1' });
+
+    const worker = buildWorker({
+      token: TOKEN,
+      jobName: 'StopJob',
+      args: [],
+      jobIndex: 0,
+      stepIndex: 0,
+      frame: {},
+    });
+
+    const runPromise = worker.run({ retries: 0 });
+    await worker.stop();
+    await runPromise;
+
+    expect(seen.length).toBeLessThan(2);
+    expect(await queue.stopped()).toBe(false);
+  });
+
+  it('stop() before run() prevents the loop from starting', async () => {
+    let beforeCalled = false;
+
+    class StopBeforeRunJob {
+      run(): Job<any, any> {
+        return new Job()
+          .parallelize(() => [], { partitions: 4, before: () => { beforeCalled = true; } });
+      }
+    }
+
+    const { redis } = await setupKraps({ jobs: { StopBeforeRunJob } });
+    const queue = buildQueue(redis);
+
+    await queue.enqueue({ item: 'a', part: '0' });
+
+    const worker = buildWorker({
+      token: TOKEN,
+      jobName: 'StopBeforeRunJob',
+      args: [],
+      jobIndex: 0,
+      stepIndex: 0,
+      frame: {},
+    });
+
+    await worker.stop();
+    await worker.run({ retries: 0 });
+
+    expect(beforeCalled).toBe(false);
+  });
+
   it('rejects an unknown action', async () => {
     class BadJob {
       run(): Job<any, any> {

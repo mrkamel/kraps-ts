@@ -46,6 +46,8 @@ export class Worker {
 
   private redisQueueCache: RedisQueue | null = null;
   private jobsCache: AnyJob[] | null = null;
+  private stopRequested = false;
+  private runPromise: Promise<void> | null = null;
 
   constructor(
     json: string,
@@ -60,8 +62,23 @@ export class Worker {
   }
 
   async run({ retries = 3 }: { retries?: number } = {}): Promise<void> {
+    if (this.runPromise) return this.runPromise;
+
+    this.runPromise = this.runLoop(retries);
+
+    return this.runPromise;
+  }
+
+  async stop(): Promise<void> {
+    this.stopRequested = true;
+
+    if (this.runPromise) await this.runPromise.catch(() => {});
+  }
+
+  private async runLoop(retries: number): Promise<void> {
     const redisQueue = this.redisQueue();
 
+    if (this.stopRequested) return;
     if (await redisQueue.stopped()) return;
 
     await this.resolveJobsFromRegistry();
@@ -73,6 +90,7 @@ export class Worker {
     }
 
     while (true) {
+      if (this.stopRequested) break;
       if (await redisQueue.stopped()) break;
       if (await redisQueue.size() === 0) break;
 
