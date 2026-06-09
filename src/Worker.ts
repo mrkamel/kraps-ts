@@ -59,7 +59,9 @@ export class Worker {
     this.logger = logger;
   }
 
-  async run({ retries = 3 }: { retries?: number } = {}): Promise<void> {
+  async run({ retries = 3, signal }: { retries?: number, signal?: AbortSignal } = {}): Promise<void> {
+    signal?.throwIfAborted();
+
     const redisQueue = this.redisQueue();
 
     if (await redisQueue.stopped()) return;
@@ -73,6 +75,7 @@ export class Worker {
     }
 
     while (true) {
+      signal?.throwIfAborted();
       if (await redisQueue.stopped()) break;
       if (await redisQueue.size() === 0) break;
 

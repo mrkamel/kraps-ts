@@ -436,6 +436,70 @@ describe('Worker', () => {
     expect(beforeCalled).toBe(false);
   });
 
+  it('aborts the run loop when the signal is aborted mid-run', async () => {
+    const controller = new AbortController();
+    const seen: string[] = [];
+
+    class AbortJob {
+      run(): Job<any, any> {
+        return new Job()
+          .parallelize(() => [], { partitions: 4, before: () => { seen.push('before'); controller.abort(); } });
+      }
+    }
+
+    const { redis } = await setupKraps({ jobs: { AbortJob } });
+    const queue = buildQueue(redis);
+
+    await queue.enqueue({ item: 'a', part: '0' });
+    await queue.enqueue({ item: 'b', part: '1' });
+
+    const worker = buildWorker({
+      token: TOKEN,
+      jobName: 'AbortJob',
+      args: [],
+      jobIndex: 0,
+      stepIndex: 0,
+      frame: {},
+    });
+
+    await expect(worker.run({ retries: 0, signal: controller.signal })).rejects.toThrow();
+
+    expect(seen.length).toBeLessThan(2);
+    expect(await queue.stopped()).toBe(false);
+  });
+
+  it('throws immediately when the signal is already aborted', async () => {
+    let beforeCalled = false;
+
+    class AbortBeforeRunJob {
+      run(): Job<any, any> {
+        return new Job()
+          .parallelize(() => [], { partitions: 4, before: () => { beforeCalled = true; } });
+      }
+    }
+
+    const { redis } = await setupKraps({ jobs: { AbortBeforeRunJob } });
+    const queue = buildQueue(redis);
+
+    await queue.enqueue({ item: 'a', part: '0' });
+
+    const worker = buildWorker({
+      token: TOKEN,
+      jobName: 'AbortBeforeRunJob',
+      args: [],
+      jobIndex: 0,
+      stepIndex: 0,
+      frame: {},
+    });
+
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(worker.run({ retries: 0, signal: controller.signal })).rejects.toThrow();
+
+    expect(beforeCalled).toBe(false);
+  });
+
   it('rejects an unknown action', async () => {
     class BadJob {
       run(): Job<any, any> {
